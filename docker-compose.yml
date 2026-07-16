@@ -1,0 +1,61 @@
+services:
+  # Default production runtime: validated vLLM-Omni 0.6B Base configuration.
+  # Roll back to docker-compose.eager-1.7b.yml if required.
+  aegis-tts:
+    image: vllm/vllm-omni@sha256:8b0cc5438eb27b34cdfd22011b735da6a94835a09e9c56ddf9e8cb300d679919
+    container_name: aegis-tts
+    restart: unless-stopped
+    entrypoint: []
+    command: ["/usr/bin/bash", "/gateway/run-vllm-with-default-reference.sh"]
+    ports:
+      - "${AEGIS_TTS_BIND_ADDRESS:-0.0.0.0}:${AEGIS_TTS_PORT:-8001}:8001"
+    volumes:
+      - ./models/Qwen3-TTS-12Hz-0.6B-Base:/models/Qwen3-TTS-12Hz-0.6B-Base:ro
+      - ./voices/giseli-34s:/voices/giseli-34s:ro
+      - ./giselle_AegisVoice3.wav:/defaults/reference.wav:ro
+      - ./giselle_AegisVoice3.txt:/defaults/reference.txt:ro
+      - ./cache/vllm-omni:/cache
+      - ./config/vllm-qwen3-tts-0.6b.yaml:/config/vllm-qwen3-tts-0.6b.yaml:ro
+      - ./gateway:/gateway:ro
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      VLLM_ENABLE_CUDA_COMPATIBILITY: "1"
+      VLLM_LOGGING_LEVEL: WARNING
+      HF_HOME: /cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /cache/huggingface/hub
+      TRANSFORMERS_CACHE: /cache/huggingface/transformers
+      XDG_CACHE_HOME: /cache/xdg
+      TORCHINDUCTOR_CACHE_DIR: /cache/torchinductor
+      HOME: /cache/home
+      PYTHONPATH: /gateway
+      AEGIS_VLLM_BACKEND_URL: http://127.0.0.1:8091
+      AEGIS_DEFAULT_REFERENCE_AUDIO: /defaults/reference.wav
+      AEGIS_DEFAULT_REFERENCE_TEXT: /defaults/reference.txt
+      AEGIS_DEFAULT_MODEL: /models/Qwen3-TTS-12Hz-0.6B-Base
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    shm_size: 8gb
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20m
+    logging:
+      driver: local
+      options:
+        max-size: 20m
+        max-file: "3"

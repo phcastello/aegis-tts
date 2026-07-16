@@ -1,0 +1,42 @@
+# Local configuration and Python/tooling artefacts
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+gitdiff.txt
+
+# Private/generated assets.  Keep only the explicit directory placeholders.
+voices/*
+!voices/.gitkeep
+!voices/giseli-10s/
+voices/giseli-10s/*
+!voices/giseli-10s/.gitkeep
+!voices/giseli-34s/
+voices/giseli-34s/*
+!voices/giseli-34s/.gitkeep
+
+models/*
+!models/.gitkeep
+cache/*
+!cache/.gitkeep
+samples/*
+!samples/.gitkeep
+reports/*
+!reports/.gitkeep
+cache-static/
+samples-static/
+
+# Temporary source files used by import-reference.sh; the canonical private
+# copies live under voices/ and neither form may be committed.
+giselle_AegisVoice*.txt
+
+# Never send private assets or local outputs in a build context.
+*.wav
+*.flac
+*.mp3
+*.ogg
