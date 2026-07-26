@@ -1,0 +1,9 @@
+# Frozen DSP/runtime set for the AegisVoicev1.0 gateway image.  These are
+# installed while building the image, never when the container starts.
+fastapi==0.115.12
+httpx==0.28.1
+uvicorn[standard]==0.34.0
+numpy==1.26.4
+scipy==1.13.1
+pyworld==0.3.4
+PyYAML==6.0.2

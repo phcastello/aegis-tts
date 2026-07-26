@@ -1,7 +1,0 @@
-{
-  "model": "/models/Qwen3-TTS-12Hz-0.6B-Base",
-  "voice": "giseli-34s",
-  "reference_audio": "giselle_AegisVoice3.wav",
-  "reference_text": "giselle_AegisVoice3.txt",
-  "text": "Olá, Pedro. Pelo que eu verifiquei, todos os serviços estão funcionando normalmente. A reunião continua marcada para segunda-feira, e ainda há algumas mensagens que precisam de resposta. Depois disso, posso organizar as próximas tarefas e revisar o que ficou pendente para amanhã."
-}

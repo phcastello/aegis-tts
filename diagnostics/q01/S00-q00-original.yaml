@@ -1,0 +1,2 @@
+# Exact protected Q00 baseline.  The source file is never modified.
+base_config: /protected/config/q00-vllm-deploy-exact.yaml

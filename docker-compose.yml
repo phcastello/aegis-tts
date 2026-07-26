@@ -2,21 +2,21 @@ services:
   # Default production runtime: validated vLLM-Omni 0.6B Base configuration.
   # Roll back to docker-compose.eager-1.7b.yml if required.
   aegis-tts:
-    image: vllm/vllm-omni@sha256:8b0cc5438eb27b34cdfd22011b735da6a94835a09e9c56ddf9e8cb300d679919
+    build:
+      context: .
+      dockerfile: ${AEGIS_GATEWAY_DOCKERFILE:-gateway/Dockerfile}
+    image: ${AEGIS_GATEWAY_IMAGE:-aegis-tts-gateway:aegisvoicev1.0}
     container_name: aegis-tts
     restart: unless-stopped
     entrypoint: []
     command: ["/usr/bin/bash", "/gateway/run-vllm-with-default-reference.sh"]
     ports:
-      - "${AEGIS_TTS_BIND_ADDRESS:-0.0.0.0}:${AEGIS_TTS_PORT:-8001}:8001"
+      - "${AEGIS_TTS_BIND_ADDRESS:-127.0.0.1}:${AEGIS_TTS_PORT:-8001}:8001"
     volumes:
       - ./models/Qwen3-TTS-12Hz-0.6B-Base:/models/Qwen3-TTS-12Hz-0.6B-Base:ro
-      - ./voices/giseli-34s:/voices/giseli-34s:ro
-      - ./giselle_AegisVoice3.wav:/defaults/reference.wav:ro
-      - ./giselle_AegisVoice3.txt:/defaults/reference.txt:ro
       - ./cache/vllm-omni:/cache
-      - ./config/vllm-qwen3-tts-0.6b.yaml:/config/vllm-qwen3-tts-0.6b.yaml:ro
-      - ./gateway:/gateway:ro
+      - ./protected/AegisVoicev1.0:/protected:ro
+      - ./diagnostics:/diagnostics:ro
     environment:
       CUDA_VISIBLE_DEVICES: "0"
       NVIDIA_VISIBLE_DEVICES: "0"
@@ -31,14 +31,17 @@ services:
       HOME: /cache/home
       PYTHONPATH: /gateway
       AEGIS_VLLM_BACKEND_URL: http://127.0.0.1:8091
-      AEGIS_DEFAULT_REFERENCE_AUDIO: /defaults/reference.wav
-      AEGIS_DEFAULT_REFERENCE_TEXT: /defaults/reference.txt
-      AEGIS_DEFAULT_MODEL: /models/Qwen3-TTS-12Hz-0.6B-Base
+      AEGIS_VLLM_DEPLOY_CONFIG: /protected/config/q00-vllm-deploy-exact.yaml
+      AEGIS_ALLOW_REPLACE_ALL: ${AEGIS_ALLOW_REPLACE_ALL:-0}
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     shm_size: 8gb
     security_opt:
       - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    stop_grace_period: 45s
     deploy:
       resources:
         reservations:
@@ -49,7 +52,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"
+        - python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/ready', timeout=5)"
       interval: 10s
       timeout: 6s
       retries: 12

@@ -1,0 +1,6 @@
+# Operational join limits; this file contains no acoustic preset controls.
+segment_join:
+  minimum_gap_ms: 80
+  maximum_gap_ms: 350
+  default_gap_ms: 160
+  preserve_natural_tail: true

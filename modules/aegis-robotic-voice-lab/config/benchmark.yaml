@@ -1,0 +1,6 @@
+short_repetitions: 5
+long_repetitions: 3
+dsp_targets: {ideal_rtf: 0.10, acceptable_rtf: 0.25, inadequate_rtf: 0.50}
+max_end_to_end_seconds: 5.0
+f0_method: dio_stonemask
+max_unvoiced_gap_ms: 40

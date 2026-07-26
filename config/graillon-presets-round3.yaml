@@ -1,0 +1,51 @@
+engine: graillon_lv2
+round: round3
+defaults: {sample_rate: 24000, channels: 1, sample_format: s16le}
+plugin: {uri_env: AEGIS_GRAILLON_PLUGIN_URI}
+round3_hard_tune: &base
+  wet_mix: 0.85
+  dry_mix: 0.15
+  global_amount: 1.0
+  output_gain: 0.707946
+  correction_enabled: 1.0
+  correction_amount: 1.0
+  midi_enabled: 0.0
+  ptm_enabled: 0.0
+  tune_keyboard: 0.0
+  compressor: 0.0
+  gate: 0.0
+  chorus: 0.0
+  doubler: 0.0
+  fx_enabled: 1.0
+  pitch_shift: 0.5
+  formant_enabled: 1.0
+  formant_amount: 1.0
+  formant_shift: 0.5
+  pitch_engine: 0.5
+  smooth: 0.04
+  inertia: 0.06
+  snap_min: 0.0
+  snap_max: 1.0
+  allow_c: 1.0
+  allow_c_sharp: 0.0
+  allow_d: 0.0
+  allow_d_sharp: 1.0
+  allow_e: 0.0
+  allow_f: 1.0
+  allow_f_sharp: 0.0
+  allow_g: 1.0
+  allow_g_sharp: 0.0
+  allow_a: 0.0
+  allow_a_sharp: 1.0
+  allow_b: 0.0
+presets:
+  - {id: S300, name: r253-baseline, family: r253-intensity, description: 'R253: C menor pentatônica, controle da rodada.', base_state: round2-hard-tune-base, variant: baseline, mask: R253, controls: {<<: *base}}
+  - {id: S301, name: r253-wet-095, family: r253-intensity, description: 'R253: wet 0.95 / dry 0.05.', base_state: round2-hard-tune-base, variant: wet-095, mask: R253, controls: {<<: *base, wet_mix: 0.95, dry_mix: 0.05}}
+  - {id: S302, name: r253-wet-100, family: r253-intensity, description: 'R253: wet total.', base_state: round2-hard-tune-base, variant: wet-100, mask: R253, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0}}
+  - {id: S303, name: r253-hard-zero, family: r253-intensity, description: 'R253: wet total, smooth e inertia mínimos.', base_state: round2-hard-tune-base, variant: hard-zero, mask: R253, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0, smooth: 0.0, inertia: 0.0}}
+  - {id: S304, name: r253-hard-formant-plus-1p5, family: r253-formant, description: 'R253: hard-zero e formant shift +1.5 semitons.', base_state: round2-hard-tune-base, variant: formant-plus-1p5, mask: R253, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0, smooth: 0.0, inertia: 0.0, formant_shift: 0.5625}}
+  - {id: S310, name: r255-baseline, family: r255-intensity, description: 'R255: D, G e A, controle da rodada.', base_state: round2-hard-tune-base, variant: baseline, mask: R255, controls: {<<: *base, allow_c: 0.0, allow_c_sharp: 0.0, allow_d: 1.0, allow_d_sharp: 0.0, allow_e: 0.0, allow_f: 0.0, allow_f_sharp: 0.0, allow_g: 1.0, allow_g_sharp: 0.0, allow_a: 1.0, allow_a_sharp: 0.0, allow_b: 0.0}}
+  - {id: S311, name: r255-wet-095, family: r255-intensity, description: 'R255: wet 0.95 / dry 0.05.', base_state: round2-hard-tune-base, variant: wet-095, mask: R255, controls: {<<: *base, wet_mix: 0.95, dry_mix: 0.05, allow_c: 0.0, allow_c_sharp: 0.0, allow_d: 1.0, allow_d_sharp: 0.0, allow_e: 0.0, allow_f: 0.0, allow_f_sharp: 0.0, allow_g: 1.0, allow_g_sharp: 0.0, allow_a: 1.0, allow_a_sharp: 0.0, allow_b: 0.0}}
+  - {id: S312, name: r255-wet-100, family: r255-intensity, description: 'R255: wet total.', base_state: round2-hard-tune-base, variant: wet-100, mask: R255, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0, allow_c: 0.0, allow_c_sharp: 0.0, allow_d: 1.0, allow_d_sharp: 0.0, allow_e: 0.0, allow_f: 0.0, allow_f_sharp: 0.0, allow_g: 1.0, allow_g_sharp: 0.0, allow_a: 1.0, allow_a_sharp: 0.0, allow_b: 0.0}}
+  - {id: S313, name: r255-hard-zero, family: r255-intensity, description: 'R255: wet total, smooth e inertia mínimos.', base_state: round2-hard-tune-base, variant: hard-zero, mask: R255, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0, smooth: 0.0, inertia: 0.0, allow_c: 0.0, allow_c_sharp: 0.0, allow_d: 1.0, allow_d_sharp: 0.0, allow_e: 0.0, allow_f: 0.0, allow_f_sharp: 0.0, allow_g: 1.0, allow_g_sharp: 0.0, allow_a: 1.0, allow_a_sharp: 0.0, allow_b: 0.0}}
+  - {id: S314, name: r255-hard-formant-plus-1p5, family: r255-formant, description: 'R255: hard-zero e formant shift +1.5 semitons.', base_state: round2-hard-tune-base, variant: formant-plus-1p5, mask: R255, controls: {<<: *base, wet_mix: 1.0, dry_mix: 0.0, smooth: 0.0, inertia: 0.0, formant_shift: 0.5625, allow_c: 0.0, allow_c_sharp: 0.0, allow_d: 1.0, allow_d_sharp: 0.0, allow_e: 0.0, allow_f: 0.0, allow_f_sharp: 0.0, allow_g: 1.0, allow_g_sharp: 0.0, allow_a: 1.0, allow_a_sharp: 0.0, allow_b: 0.0}}

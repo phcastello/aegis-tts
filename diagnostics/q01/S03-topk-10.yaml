@@ -1,0 +1,8 @@
+base_config: /protected/config/q00-vllm-deploy-exact.yaml
+stages:
+  - stage_id: 0
+    default_sampling_params:
+      temperature: 0.30
+      top_p: 0.80
+      top_k: 10
+      repetition_penalty: 1.05

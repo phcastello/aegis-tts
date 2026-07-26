@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+deploy_config="/protected/config/q00-vllm-deploy-exact.yaml"
+
 vllm serve /models/Qwen3-TTS-12Hz-0.6B-Base \
-  --deploy-config /config/vllm-qwen3-tts-0.6b.yaml \
+  --deploy-config "$deploy_config" \
   --omni \
   --host 127.0.0.1 \
   --port 8091 \

@@ -1,0 +1,57 @@
+# This is a deliberately small, explicit experiment matrix.  vLLM-Omni 0.22
+# accepts these sampler controls only in the Stage 0 deploy configuration, not
+# in individual /v1/audio/speech requests.  A profile is therefore one model
+# residency, not a Cartesian search.
+runtime:
+  image: vllm/vllm-omni@sha256:8b0cc5438eb27b34cdfd22011b735da6a94835a09e9c56ddf9e8cb300d679919
+  model: Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  container_name: aegis-qwen-cold-lab
+  compose_project: aegis-qwen-cold-lab
+  service: qwen-cold
+  port: 18001
+  ready_timeout_seconds: 1200
+  seed: 40733133
+  max_new_tokens: 1024
+
+# Both paths may be overridden by the corresponding AEGIS_QWEN_COLD_* vars.
+reference:
+  audio: /home/phc/aegis-tts/Aninha_AegisVoice4.wav
+  transcript: /home/phc/aegis-tts/Aninha_AegisVoice4.txt
+
+# Q00 is near-greedy.  Q01-Q04 add only bounded sampling diversity, while
+# retaining the same Aninha reference, corpus, seed and decoder settings.
+profiles:
+  Q00:
+    description: near-greedy cold
+    temperature: 0.05
+    top_p: 0.30
+    top_k: 1
+    repetition_penalty: 1.15
+  Q01:
+    description: very-low variation
+    temperature: 0.10
+    top_p: 0.45
+    top_k: 5
+    repetition_penalty: 1.12
+  Q02:
+    description: low variation
+    temperature: 0.20
+    top_p: 0.60
+    top_k: 10
+    repetition_penalty: 1.10
+  Q03:
+    description: restrained
+    temperature: 0.35
+    top_p: 0.75
+    top_k: 20
+    repetition_penalty: 1.08
+  Q04:
+    description: conservative control
+    temperature: 0.50
+    top_p: 0.85
+    top_k: 30
+    repetition_penalty: 1.05
+
+# The two selected strict resynthesis directions are applied to every valid
+# Qwen source.  Neither engine receives or mixes the source waveform.
+effects: [L00, W04]

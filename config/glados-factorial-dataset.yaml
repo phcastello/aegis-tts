@@ -1,0 +1,25 @@
+dataset:
+  clean:
+    path_env: AEGIS_GLADOS_AUDIO_CLEAN
+  C:
+    path_env: AEGIS_GLADOS_AUDIO_C
+  M:
+    path_env: AEGIS_GLADOS_AUDIO_M
+  F:
+    path_env: AEGIS_GLADOS_AUDIO_F
+  CM:
+    path_env: AEGIS_GLADOS_AUDIO_CM
+  CF:
+    path_env: AEGIS_GLADOS_AUDIO_CF
+  FM:
+    path_env: AEGIS_GLADOS_AUDIO_FM
+  CFM:
+    path_env: AEGIS_GLADOS_AUDIO_CFM
+
+effects:
+  modulation:
+    contexts:
+      - {id: clean-to-M, source: clean, target: M}
+      - {id: C-to-CM, source: C, target: CM}
+      - {id: F-to-FM, source: F, target: FM}
+      - {id: CF-to-CFM, source: CF, target: CFM}

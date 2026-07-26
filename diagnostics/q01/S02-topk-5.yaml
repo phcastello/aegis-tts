@@ -1,0 +1,9 @@
+# Q01 principal candidate: slightly less greedy, all other Q00 values inherit.
+base_config: /protected/config/q00-vllm-deploy-exact.yaml
+stages:
+  - stage_id: 0
+    default_sampling_params:
+      temperature: 0.15
+      top_p: 0.60
+      top_k: 5
+      repetition_penalty: 1.05

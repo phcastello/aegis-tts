@@ -1,0 +1,35 @@
+speech_service:
+  profile: AegisVoicev1.0
+  locale: pt-BR
+queue:
+  max_requests: 32
+  max_segments: 128
+  max_total_characters: 50000
+  default_priority: 50
+  min_priority: 0
+  max_priority: 100
+  aging_enabled: true
+  aging_interval_seconds: 30
+  aging_increment: 1
+  aging_max_bonus: 10
+normalization:
+  enabled: true
+  strict_unicode: true
+  preserve_original: true
+  max_input_characters: 12000
+segmentation:
+  enabled: true
+  min_chars: 20
+  preferred_max_chars: 180
+  hard_max_chars: 320
+streaming:
+  max_buffered_pcm_seconds: 4.0
+  warning_buffered_pcm_seconds: 2.0
+  max_client_stall_seconds: 10
+events:
+  retention_events_per_request: 256
+  retention_seconds: 600
+privacy:
+  log_original_text: false
+  log_normalized_text: false
+  log_reference_paths: false

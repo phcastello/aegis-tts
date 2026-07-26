@@ -1,0 +1,274 @@
+{
+  "M01": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.0003145927977363029,
+        "detection_band_5000_8000": 0.00025195388945331955,
+        "intelligibility_band_300_4000": 0.0028128524981989545
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": 0.04577977969087517,
+        "detection_band_5000_8000": 0.04687657349378803,
+        "intelligibility_band_300_4000": -0.001674187943982811
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M02": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00029698439188760193,
+        "detection_band_5000_8000": 0.00022884286923631613,
+        "intelligibility_band_300_4000": 0.002811388527028603
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.204371722993759,
+        "detection_band_5000_8000": -0.37096025348594386,
+        "intelligibility_band_300_4000": -0.003935096082366779
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M03": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.0002774899304032838,
+        "detection_band_5000_8000": 0.00020178029864534994,
+        "intelligibility_band_300_4000": 0.0028097234750028978
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.49923569726448597,
+        "detection_band_5000_8000": -0.9175464919176204,
+        "intelligibility_band_300_4000": -0.006507978201540982
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M04": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00025856119387831047,
+        "detection_band_5000_8000": 0.00017468013377294642,
+        "intelligibility_band_300_4000": 0.002808693460403095
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.806074533201417,
+        "detection_band_5000_8000": -1.5438989382961246,
+        "intelligibility_band_300_4000": -0.00810034725185675
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M05": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00027779002678464176,
+        "detection_band_5000_8000": 0.00019791920134716188,
+        "intelligibility_band_300_4000": 0.002806167020373628
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.49454148082592586,
+        "detection_band_5000_8000": -1.0014547986583482,
+        "intelligibility_band_300_4000": -0.012008615467821372
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M06": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.0002936468798707215,
+        "detection_band_5000_8000": 0.00023142972535711347,
+        "intelligibility_band_300_4000": 0.002813701345559599
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.2534540709638893,
+        "detection_band_5000_8000": -0.32214269705504417,
+        "intelligibility_band_300_4000": -0.00036379533870487684
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M07": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.0002561779171838763,
+        "detection_band_5000_8000": 0.00016958304919350553,
+        "intelligibility_band_300_4000": 0.0028083498700652077
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.8462910736333178,
+        "detection_band_5000_8000": -1.6725096982392853,
+        "intelligibility_band_300_4000": -0.008631656622950304
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  },
+  "M08": {
+    "diagnostic_sentences": [
+      "sibilants"
+    ],
+    "reference": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031129403420643493,
+        "detection_band_5000_8000": 0.0002492489914451421,
+        "intelligibility_band_300_4000": 0.002813937050674513
+      }
+    },
+    "raw": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00031459281499514064,
+        "detection_band_5000_8000": 0.00025195389558193567,
+        "intelligibility_band_300_4000": 0.002816056274815122
+      }
+    },
+    "mastered": {
+      "sibilants": {
+        "high_band_5200_10000": 0.00027742130694581303,
+        "detection_band_5000_8000": 0.00020165427101712698,
+        "intelligibility_band_300_4000": 0.002810599796156771
+      }
+    },
+    "mastered_relative_to_reference_db": {
+      "sibilants": {
+        "high_band_5200_10000": -0.5003098434361503,
+        "detection_band_5000_8000": -0.9202598491458205,
+        "intelligibility_band_300_4000": -0.005153673738168316
+      }
+    },
+    "note": "Comparative diagnostic only; this report does not select a winner."
+  }
+}

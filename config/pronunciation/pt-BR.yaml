@@ -1,0 +1,23 @@
+version: 1
+entries:
+  - id: aegis
+    match: {type: token, value: Aegis, case_sensitive: false}
+    replacement: Égide
+    enabled: true
+    note: Nome do sistema.
+  - id: vpn
+    match: {type: token, value: VPN, case_sensitive: true}
+    replacement: vê pê ene
+    enabled: true
+  - id: dns
+    match: {type: token, value: DNS, case_sensitive: true}
+    replacement: dê ene ésse
+    enabled: true
+  - id: gpu
+    match: {type: token, value: GPU, case_sensitive: true}
+    replacement: gê pê u
+    enabled: true
+  - id: qwen
+    match: {type: token, value: Qwen, case_sensitive: false}
+    replacement: Cuén
+    enabled: true

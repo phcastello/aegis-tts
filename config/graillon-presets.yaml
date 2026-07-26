@@ -1,0 +1,16 @@
+engine: graillon_lv2
+defaults: {sample_rate: 24000, channels: 1, sample_format: s16le}
+plugin: {uri_env: AEGIS_GRAILLON_PLUGIN_URI}
+presets:
+  - {id: G00, name: graillon-bypass, family: control, description: Sinal seco para comparação., enabled: true, streaming_safe: true, base_state: default, controls: {wet_mix: 0.0, dry_mix: 1.0, global_amount: 1.0, correction_enabled: 0.0, formant_enabled: 0.0, midi_enabled: 0.0}}
+  - {id: G01, name: official-hard-tune, family: hard-tune, description: Preset oficial Hard Tune sem alterações., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}
+  - {id: G02, name: wet-correction-disabled, family: control, description: Sinal wet com correção explicitamente desligada., enabled: true, streaming_safe: true, base_state: default, controls: {wet_mix: 1.0, dry_mix: 0.0, correction_enabled: 0.0, correction_amount: 1.0, midi_enabled: 0.0}}
+  - {id: G03, name: chromatic-instant, family: hard-tune, description: Cromático, smooth e inertia mínimos., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {smooth: 0.0, inertia: 0.0}}
+  - {id: G04, name: chromatic-smooth-low, family: hard-tune, description: Cromático, smooth baixo e inertia mínima., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {smooth: 0.12, inertia: 0.0}}
+  - {id: G05, name: chromatic-inertia-low, family: hard-tune, description: Cromático, smooth mínimo e inertia baixa., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {smooth: 0.0, inertia: 0.12}}
+  - {id: G06, name: chromatic-balanced, family: hard-tune, description: Cromático, smooth e inertia baixos., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {smooth: 0.12, inertia: 0.12}}
+  - {id: G07, name: notes-g-a, family: restricted-notes, description: Correção agressiva limitada a G e A., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}
+  - {id: G08, name: notes-g-a-d, family: restricted-notes, description: Correção agressiva limitada a G, A e D., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}
+  - {id: G09, name: notes-c-g-a, family: restricted-notes, description: Correção agressiva limitada a C, G e A., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}
+  - {id: G10, name: c-minor, family: restricted-notes, description: Correção agressiva na escala C menor., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}
+  - {id: G11, name: c-major, family: restricted-notes, description: Correção agressiva na escala C maior., enabled: true, streaming_safe: true, base_state: official-hard-tune, controls: {}}

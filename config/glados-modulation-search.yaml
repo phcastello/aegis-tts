@@ -1,0 +1,53 @@
+experiment:
+  id: melodyne-modulation-replication
+  seed: 40733133
+dataset:
+  config_env: AEGIS_GLADOS_MOD_DATASET_CONFIG
+audio:
+  sample_rate: 24000
+  channels: 1
+  analysis_format: float64
+  frame_period_ms: 5.0
+engines:
+  world:
+    enabled: true
+    f0_extractors: [dio_stonemask, harvest]
+  praat:
+    enabled: true
+optimization:
+  sampler: tpe
+  batch_trials: 200
+  max_total_trials: 1000
+  n_startup_trials: 20
+  multivariate: true
+  group: true
+  checkpoint: {mode: manual}
+  search_space:
+    modulation_factor: {type: float, low: -0.25, high: 0.50}
+    trend_method:
+      type: categorical
+      choices: [moving_median, moving_mean, savgol, butterworth_lowpass, robust_spline, median_then_lowpass]
+    smoothing_window_ms: {type: float, low: 20, high: 600, log: true}
+    lowpass_cutoff_hz: {type: float, low: 0.2, high: 8.0, log: true}
+    spline_smoothing: {type: float, low: 0.001, high: 100.0, log: true}
+    savgol_order: {type: categorical, choices: [2, 3, 4]}
+    split_jump_cents: {type: float, low: 30, high: 300}
+    max_unvoiced_gap_ms: {type: float, low: 0, high: 120}
+    minimum_region_ms: {type: float, low: 15, high: 250}
+    preserve_attack_ms: {type: float, low: 0, high: 150}
+    preserve_release_ms: {type: float, low: 0, high: 150}
+    transition_ms: {type: float, low: 0, high: 120}
+    transition_curve: {type: categorical, choices: [step, linear, cosine]}
+scoring:
+  modulation_residual: 0.40
+  drift_preservation: 0.25
+  f0_agreement: 0.15
+  spectral_preservation: 0.10
+  voiced_unvoiced: 0.05
+  timing: 0.05
+  denominator_epsilon: 1.0e-8
+  minimum_informative_distance: 0.01
+  maximum_duration_error_ms: 15.0
+  maximum_missing_f0_fraction: 0.60
+visualization:
+  update_every_trials: 10

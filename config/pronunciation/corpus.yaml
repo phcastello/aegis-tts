@@ -1,0 +1,31 @@
+cases:
+  - id: gpu-percentage
+    input: A GPU chegou a 62%.
+    expected_normalized: A gê pê u chegou a sessenta e dois por cento.
+  - id: vpn-dns
+    input: A VPN está ativa, mas o DNS interno não respondeu.
+    expected_normalized: A vê pê ene está ativa, mas o dê ene ésse interno não respondeu.
+  - id: detection
+    input: O sistema de detecção está ativo.
+    expected_normalized: O sistema de detecção está ativo.
+  - id: ip-port
+    input: O servidor 10.1.1.47 responde na porta 8001.
+    expected_normalized: O servidor dez ponto um ponto um ponto quarenta e sete responde na porta oito mil e um.
+  - id: clock
+    input: Agora são 14:35.
+    expected_normalized: Agora são quatorze horas e trinta e cinco minutos.
+  - id: temperature
+    input: A temperatura externa é de -3,5 °C.
+    expected_normalized: A temperatura externa é de menos três vírgula cinco graus Celsius.
+  - id: storage
+    input: O processo consumiu 3,5 GB.
+    expected_normalized: O processo consumiu três vírgula cinco gigabytes.
+  - id: version
+    input: O PipeWire está na versão 1.4.11.
+    expected_normalized: O PipeWire está na versão um ponto quatro ponto onze.
+  - id: qwen
+    input: O Qwen concluiu a geração.
+    expected_normalized: O Cuén concluiu a geração.
+  - id: aegis
+    input: Aegis está operacional.
+    expected_normalized: Égide está operacional.

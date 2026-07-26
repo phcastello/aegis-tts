@@ -1,0 +1,6 @@
+# Only Stage 0 repetition penalty differs from Q00.
+base_config: /protected/config/q00-vllm-deploy-exact.yaml
+stages:
+  - stage_id: 0
+    default_sampling_params:
+      repetition_penalty: 1.05

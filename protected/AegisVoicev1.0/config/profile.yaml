@@ -1,0 +1,8 @@
+profile: AegisVoicev1.0
+public_profile_header: AegisVoicev1.0-Q00-W04-P07-M02
+sample_rate: 24000
+channels: 1
+pcm_format: s16le
+qwen_config: q00-vllm-deploy-exact.yaml
+voice_config: qwen-selected-p07-m02-v1.0.yaml
+acoustic_parameters_client_controlled: false

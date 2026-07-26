@@ -1,0 +1,47 @@
+version: AegisVoicev1.0
+selection:
+  source_profile: Q00
+  sentence_id: sibilants
+  sentence_text: "Seis sensores silenciosos estão instalados no sistema de segurança."
+  effect_engine: world
+  effect_preset: W04
+  raw_variant: P07
+  mastered_variant: M02
+  selection_note: "P07 0.52 removes the WORLD raw buzz acceptably; M02 preserves it with a light de-esser."
+
+source:
+  wav: ../audio/q00-source-sibilants.wav
+  sha256: 3d03ec5ae6f509180f0a500ec9bff8c9499845d2c68e36a6a78e457ab1d3488e
+
+world_w04:
+  modulation_factor: 0.0
+  range_compression: 0.0
+  quantization: fixed_cents
+  quantization_step_cents: 200
+  transition_ms: 0
+  formant_scale: 1.10
+  aperiodicity_voiced_scale: 0.52
+  strict_resynthesis: true
+  source_waveform_is_audible: false
+  output_raw_wav: ../audio/q00-w04-raw-sibilants.wav
+  output_raw_sha256: 6c489f2804dd527d0e97111650222e0e6f34e60c1c22ce0495350c27eabe9e85
+
+mastering_m02:
+  high_pass_hz: 60
+  deesser_enabled: true
+  center_hz: 6500
+  bandwidth_hz: 2200
+  threshold_dbfs: -30.0
+  max_reduction_db: 1.5
+  attack_ms: 2.0
+  release_ms: 45.0
+  limiter_true_peak_db: -1.0
+  output_mastered_wav: ../audio/q00-w04-mastered-sibilants.wav
+  output_mastered_sha256: 338968eebd4e7d5aa974d1b1060b6925202fe13798896fb7cea23ec29a63869b
+
+qwen:
+  model: Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  docker_image: vllm/vllm-omni@sha256:8b0cc5438eb27b34cdfd22011b735da6a94835a09e9c56ddf9e8cb300d679919
+  seed: 40733133
+  reference_wav: ../reference/Aninha_AegisVoice4.wav
+  reference_transcript: ../reference/Aninha_AegisVoice4.txt

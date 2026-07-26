@@ -1,5 +1,24 @@
 # Local configuration and Python/tooling artefacts
 .env
+experiments/glados-filter-lab/.env.graillon
+experiments/glados-filter-lab/.env.reverse-engineering
+experiments/glados-filter-lab/.env.modulation
+experiments/glados-filter-lab/reference/*
+!experiments/glados-filter-lab/reference/.gitkeep
+experiments/glados-filter-lab/reverse-engineering-results/
+experiments/glados-filter-lab/modulation-results/
+reports/glados-lab/reverse-engineering/runs/
+reports/glados-lab/modulation/runs/
+AegisVoicemods/*
+experiments/glados-filter-lab/downloads/
+experiments/glados-filter-lab/plugins/
+experiments/glados-filter-lab/.graillon.lock
+experiments/glados-filter-lab/runtime/
+samples/glados-lab/graillon-results/
+samples/glados-lab/graillon-results-round2/
+samples/glados-lab/graillon-results-round3/
+samples/glados-lab/graillon-results-round4/
+reports/glados-lab/graillon/runs/
 .venv/
 __pycache__/
 *.py[cod]
@@ -9,6 +28,36 @@ __pycache__/
 htmlcov/
 .mypy_cache/
 gitdiff.txt
+
+# Isolated one-shot GLaDOS benchmark (private inputs, models and generated data)
+modules/glados-one-shot-benchmark/.env
+modules/glados-one-shot-benchmark/private/
+modules/glados-one-shot-benchmark/results/
+modules/glados-one-shot-benchmark/reports/generated/
+modules/glados-one-shot-benchmark/**/.venv/
+modules/glados-one-shot-benchmark/**/__pycache__/
+modules/glados-one-shot-benchmark/**/*.wav
+modules/glados-one-shot-benchmark/**/*.onnx
+modules/glados-one-shot-benchmark/**/*.pth
+modules/glados-one-shot-benchmark/**/*.pt
+modules/glados-one-shot-benchmark/**/*.ckpt
+modules/glados-one-shot-benchmark/**/*.index
+modules/glados-one-shot-benchmark/**/*.bin
+
+# Isolated Aegis robotic-voice laboratory (never ignore audio globally for it).
+modules/aegis-robotic-voice-lab/.env
+modules/aegis-robotic-voice-lab/private/
+modules/aegis-robotic-voice-lab/results/
+modules/aegis-robotic-voice-lab/reports/generated/
+modules/aegis-robotic-voice-lab/**/.venv/
+modules/aegis-robotic-voice-lab/**/__pycache__/
+modules/aegis-robotic-voice-lab/**/*.wav
+modules/aegis-robotic-voice-lab/**/*.flac
+modules/aegis-robotic-voice-lab/**/*.onnx
+modules/aegis-robotic-voice-lab/**/*.pth
+modules/aegis-robotic-voice-lab/**/*.pt
+modules/aegis-robotic-voice-lab/**/*.ckpt
+modules/aegis-robotic-voice-lab/**/*.safetensors
 
 # Private/generated assets.  Keep only the explicit directory placeholders.
 voices/*
@@ -40,3 +89,4 @@ giselle_AegisVoice*.txt
 *.flac
 *.mp3
 *.ogg
+*.mpd

@@ -1,0 +1,76 @@
+# Selected 2026-07-25 after listening: Qwen Q00 -> strict WORLD W04.
+# This is the canonical starting point for polishing.  It is not a dry mix:
+# WORLD receives only analyzed F0, spectral envelope and aperiodicity.
+selection:
+  id: aegis-qwen-q00-w04
+  status: selected_for_polishing
+  source_profile: Q00
+  effect_engine: world
+  effect_preset: W04
+  selection_note: "Nearly perfect; preserve the system-like, GLaDOS-adjacent direction."
+
+qwen_vllm:
+  model: Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  image: vllm/vllm-omni@sha256:8b0cc5438eb27b34cdfd22011b735da6a94835a09e9c56ddf9e8cb300d679919
+  endpoint_contract: /v1/audio/speech
+  task_type: Base
+  language: Portuguese
+  response_format: wav
+  non_streaming_mode: true
+  seed: 40733133
+  max_new_tokens: 1024
+  sample_rate: 24000
+  reference:
+    wav: /home/phc/aegis-tts/Aninha_AegisVoice4.wav
+    wav_sha256: ae4fadf748a85729ed73f67d3a3138543a6dc3acaafe49456b8703ef9982a91e
+    transcript: /home/phc/aegis-tts/Aninha_AegisVoice4.txt
+    transcript_sha256: b938bdce2f6551dcf66b678e6c3f90d2120a560863b306a0011894aa834a8f1b
+  stage_0:
+    temperature: 0.05
+    top_p: 0.30
+    top_k: 1
+    repetition_penalty: 1.15
+    min_tokens: 0
+    max_tokens: 1024
+    gpu_memory_utilization: 0.40
+    enable_prefix_caching: true
+    async_scheduling: true
+  stage_1:
+    temperature: 0.0
+    top_p: 1.0
+    top_k: -1
+    repetition_penalty: 1.0
+    max_tokens: 65536
+    gpu_memory_utilization: 0.40
+    enforce_eager: false
+  exact_runtime_deploy_sha256: fe338432711c0c44c604ce2db0ce32a8213facf43abf7977548a9e37801ec9b1
+
+world_w04:
+  modulation_factor: 0.0
+  range_compression: 0.0
+  quantization: fixed_cents
+  quantization_step_cents: 200
+  transition_ms: 0
+  formant_scale: 1.10
+  aperiodicity_voiced_scale: 0.20
+  strict_resynthesis: true
+  source_waveform_is_audible: false
+
+mastering:
+  high_pass_hz: 60
+  deesser_enabled: true
+  deesser_center_hz: 6500
+  compressor_ratio: 2.0
+  limiter_true_peak_db: -1.0
+
+verified_run:
+  corpus_sources_complete: 15
+  world_w04_candidates_complete: 15
+  qwen_warm_rtf_median: 0.5656782824652302
+  world_w04_dsp_rtf_median: 0.42381141609053663
+  qwen_peak_vram_mib: 10618
+  example:
+    sentence_id: neutral-short
+    source_sha256: 613bac0c91df548c5ec62b48ced5eb010859e899b3a44a381dacede7db8b8ba2
+    mastered_sha256: d23d186e41f7c4fd8764c45d5e0956ac6ed6ad7e967f5e0750c43f9f88934921
+    mastered_path: results/qwen-cold/mastered/Q00/W04/neutral-short.wav

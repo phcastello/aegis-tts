@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-robotic-voice-lab"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "scipy>=1.11", "PyYAML>=6", "soundfile>=0.12"]
+
+[project.scripts]
+aegis-robotic-voice = "aegis_robotic_voice.cli:main"
+
+[tool.pytest.ini_options]
+markers = ["robotic_voice_integration: requires the private Chatterbox environment and GPU"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
