@@ -1,92 +1,35 @@
-# Local configuration and Python/tooling artefacts
+# Local configuration, Python state and generated build/test output.
 .env
-experiments/glados-filter-lab/.env.graillon
-experiments/glados-filter-lab/.env.reverse-engineering
-experiments/glados-filter-lab/.env.modulation
-experiments/glados-filter-lab/reference/*
-!experiments/glados-filter-lab/reference/.gitkeep
-experiments/glados-filter-lab/reverse-engineering-results/
-experiments/glados-filter-lab/modulation-results/
-reports/glados-lab/reverse-engineering/runs/
-reports/glados-lab/modulation/runs/
-AegisVoicemods/*
-experiments/glados-filter-lab/downloads/
-experiments/glados-filter-lab/plugins/
-experiments/glados-filter-lab/.graillon.lock
-experiments/glados-filter-lab/runtime/
-samples/glados-lab/graillon-results/
-samples/glados-lab/graillon-results-round2/
-samples/glados-lab/graillon-results-round3/
-samples/glados-lab/graillon-results-round4/
-reports/glados-lab/graillon/runs/
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
-*.so
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
-.mypy_cache/
-gitdiff.txt
+build/
+dist/
+*.egg-info/
+node_modules/
+*.log
+*.tmp
+*.bak
+*.swp
 
-# Isolated one-shot GLaDOS benchmark (private inputs, models and generated data)
-modules/glados-one-shot-benchmark/.env
-modules/glados-one-shot-benchmark/private/
-modules/glados-one-shot-benchmark/results/
-modules/glados-one-shot-benchmark/reports/generated/
-modules/glados-one-shot-benchmark/**/.venv/
-modules/glados-one-shot-benchmark/**/__pycache__/
-modules/glados-one-shot-benchmark/**/*.wav
-modules/glados-one-shot-benchmark/**/*.onnx
-modules/glados-one-shot-benchmark/**/*.pth
-modules/glados-one-shot-benchmark/**/*.pt
-modules/glados-one-shot-benchmark/**/*.ckpt
-modules/glados-one-shot-benchmark/**/*.index
-modules/glados-one-shot-benchmark/**/*.bin
-
-# Isolated Aegis robotic-voice laboratory (never ignore audio globally for it).
-modules/aegis-robotic-voice-lab/.env
-modules/aegis-robotic-voice-lab/private/
-modules/aegis-robotic-voice-lab/results/
-modules/aegis-robotic-voice-lab/reports/generated/
-modules/aegis-robotic-voice-lab/**/.venv/
-modules/aegis-robotic-voice-lab/**/__pycache__/
-modules/aegis-robotic-voice-lab/**/*.wav
-modules/aegis-robotic-voice-lab/**/*.flac
-modules/aegis-robotic-voice-lab/**/*.onnx
-modules/aegis-robotic-voice-lab/**/*.pth
-modules/aegis-robotic-voice-lab/**/*.pt
-modules/aegis-robotic-voice-lab/**/*.ckpt
-modules/aegis-robotic-voice-lab/**/*.safetensors
-
-# Private/generated assets.  Keep only the explicit directory placeholders.
-voices/*
-!voices/.gitkeep
-!voices/giseli-10s/
-voices/giseli-10s/*
-!voices/giseli-10s/.gitkeep
-!voices/giseli-34s/
-voices/giseli-34s/*
-!voices/giseli-34s/.gitkeep
-
-models/*
-!models/.gitkeep
-cache/*
-!cache/.gitkeep
-samples/*
-!samples/.gitkeep
-reports/*
-!reports/.gitkeep
-cache-static/
-samples-static/
-
-# Temporary source files used by import-reference.sh; the canonical private
-# copies live under voices/ and neither form may be committed.
-giselle_AegisVoice*.txt
-
-# Never send private assets or local outputs in a build context.
+# Runtime inputs and private/generated audio remain outside Git.
+models/
+cache/
+outputs/
+results/
+runs/
+logs/
+samples/
+reports/
 *.wav
 *.flac
 *.mp3
 *.ogg
-*.mpd
+protected/AegisVoicev1.0/reference/Aninha_AegisVoice4.txt

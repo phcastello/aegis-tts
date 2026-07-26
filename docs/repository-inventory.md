@@ -1,19 +1,46 @@
-# Inventário do repositório — 2026-07-26
+# Inventário de produção
 
-| Caminho | Propósito | Produção | Arquivável | Privado | Decisão/responsável |
-|---|---|---:|---:|---:|---|
-| gateway/ | Gateway HTTP, scheduler e DSP de produção | sim | não | apenas por mount | equipe Aegis, 2026-07-26 |
-| protected/AegisVoicev1.0/ | Evidência, referência e configuração congelada | sim | não | sim | somente leitura, equipe de voz |
-| config/pronunciation/ | corpus e fonte revisável do léxico | sim | não | não | equipe Aegis |
-| config/speech/ | limites operacionais documentados | sim | não | não | equipe Aegis |
-| modules/aegis-robotic-voice-lab/ | laboratório que selecionou W04/P07/M02 | não | sim, preservar | pode conter resultados locais | histórico de voz |
-| tools/, diagnostics/ | diagnósticos e experimentos Q00/GLaDOS | não | sim, preservar | outputs locais | laboratório |
-| experiments/ | experiências não montadas no runtime | não | sim, preservar | alguns inputs | laboratório |
-| app/ | serviço anterior/alternativo, não invocado pelo Compose atual | não | sim após migração explícita | não conhecido | requer decisão futura |
-| tests/ | testes do gateway e laboratórios | sim | não | não | equipe Aegis |
-| docs/ | operação e contratos | sim | não | não | equipe Aegis |
+Baseline: `aegis-tts-production-baseline-v1` (`fc1b235eadd5ccededbc8d53a535ac3d737402a1`).
 
-Nenhum diretório foi movido nesta alteração: há imports, composições e evidências
-locais pendentes de uma migração explícita. Os WAVs privados permanecem fora do
-Git pelo arquivo de ignorados; o Compose monta o perfil protegido somente como
-leitura.
+| Caminho | Classificação | Referências / uso | Runtime/build/test/rollback | Ação | Risco / validação |
+| --- | --- | --- | --- | --- | --- |
+| `gateway/` | production-runtime | Compose, Dockerfile e imports Python | todos / não rollback | preservado | testes + Compose + smoke |
+| `config/pronunciation/`, `config/speech/` | production-config | CLI e documentação | runtime/teste | preservado | corpus e léxico |
+| `protected/AegisVoicev1.0/` | protected-profile | mount `/protected`, hashes, gateway | runtime/regressão | preservado | `validate-profile`; referência local fora do índice |
+| `tests/test_aegis_*`, `tests/test_vllm_*`, `tests/test_gpu_real.py` | production-test | pytest | teste | preservados/atualizados | unitário e opt-in GPU |
+| `scripts/audio-info.py` | operational-tool | ferramenta read-only independente | operação | preservado | execução local |
+| `app/`, Dockerfile raiz e requirements raiz | dead-code | somente Compose/testes antigos | nenhum | removidos | Compose e pytest |
+| `diagnostics/` e Dockerfile de patch | historical-experiment / generated-output | apenas mount amplo e diagnóstico Q01 | nenhum | removidos | mount removido; build limpo |
+| `modules/aegis-robotic-voice-lab/` | historical-experiment | nenhuma importação do gateway; cópia hashada existe no perfil | nenhum | removido | hashes v1.0 e testes DSP |
+| `tools/`, configs GLaDOS/Graillon | historical-experiment | somente testes e scripts laboratoriais | nenhum | removidos | pytest sem testes laboratório |
+| `docker-compose.*` alternativos | dead-code | runtime eager/app ou diagnóstico | rollback não validado | removidos | Compose único |
+| `protected/AegisVoicev0.1/` | historical-experiment | sem referência da produção | nenhum | removido | tag baseline |
+| modelos, cache, WAVs, transcript e outputs | private-artifact / cache | mounts locais | runtime local | fora do índice | `.gitignore`, clone limpo |
+
+## Mapa de dependências
+
+`docker-compose.yml` constrói `gateway/Dockerfile`, que copia somente
+`gateway/` e instala `gateway/requirements-runtime.txt`. O entrypoint inicia
+vLLM com `protected/AegisVoicev1.0/config/q00-vllm-deploy-exact.yaml` e o
+gateway Python. Este importa `aegis_speech` (normalização, segmentação e fila)
+e `voice_pipeline` (DSP). O gateway carrega apenas os assets verificados pelo
+manifest dentro do mount `/protected`. Testes importam os módulos de gateway
+ou verificam contratos estáticos; `test_gpu_real.py` é opt-in.
+
+Não há import dinâmico, subprocesso, `PYTHONPATH`, mount, configuração,
+manifest ou script de produção que alcance `app/`, `diagnostics/`, `tools/`
+ou o laboratório removido. A única referência histórica necessária à seleção
+W04/P07/M02 é a cópia congelada e hashada em `protected/AegisVoicev1.0/code/`.
+Os manifests e a proveniência imutáveis desse perfil também registram paths
+absolutos do laboratório e do perfil v0.1 como evidência da seleção histórica;
+eles não são carregados pelo runtime e não podem ser editados sem invalidar os
+hashes aprovados.
+
+## Histórico experimental
+
+Os experimentos retirados da branch continuam recuperáveis pela tag baseline:
+
+```bash
+git show aegis-tts-production-baseline-v1:modules/aegis-robotic-voice-lab/README.md
+git worktree add ../aegis-tts-history aegis-tts-production-baseline-v1
+```

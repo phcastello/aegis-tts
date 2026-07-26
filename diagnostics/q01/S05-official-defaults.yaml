@@ -1,9 +1,0 @@
-# Matches the checkpoint's public generation settings; keeps the Q00 seed.
-base_config: /protected/config/q00-vllm-deploy-exact.yaml
-stages:
-  - stage_id: 0
-    default_sampling_params:
-      temperature: 0.90
-      top_p: 1.00
-      top_k: 50
-      repetition_penalty: 1.05

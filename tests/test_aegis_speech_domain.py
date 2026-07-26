@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from aegis_speech.domain import RequestStatus, SegmentStatus, SpeechRequest, Spe
 from aegis_speech.lexicon import LexiconError, PronunciationLexicon
 from aegis_speech.normalization import SpeechTextNormalizer
 from aegis_speech.segmentation import SpeechSegmenter
-from aegis_speech.service import BusyError, SpeechService
+from aegis_speech.service import BusyError, InterruptionPlanner, QueueFullError, SpeechService
 
 
 def normalizer() -> SpeechTextNormalizer:
@@ -94,4 +95,119 @@ async def test_reject_if_busy() -> None:
     second = SpeechRequest("3" * 26, "x", "x", 50, "reject_if_busy", "AegisVoicev1.0", True, "pcm", {})
     with pytest.raises(BusyError):
         await service.submit(second, [SpeechSegment(second.request_id, 0, "x", "x", SegmentStatus.QUEUED, 1)])
+    await service.stop()
+
+
+def _request(identifier: str, priority: int = 50, policy: str = "enqueue") -> SpeechRequest:
+    return SpeechRequest(identifier * 26, "texto suficiente", "texto suficiente", priority, policy, "AegisVoicev1.0", True, "pcm", {})
+
+
+def _segment(request: SpeechRequest) -> SpeechSegment:
+    return SpeechSegment(request.request_id, 0, request.original_text, request.normalized_text or request.original_text, SegmentStatus.QUEUED, 1)
+
+
+def test_interruption_policy_only_replaces_lower_priority_and_gates_replace_all() -> None:
+    active = _request("a", priority=30)
+    equal_priority = _request("b", priority=80)
+    incoming = _request("c", priority=80, policy="replace_lower_priority")
+    cancelled, preserved = InterruptionPlanner().apply_policy(incoming, active, [equal_priority])
+    assert cancelled == [active.request_id]
+    assert preserved == [equal_priority.request_id]
+    with pytest.raises(PermissionError):
+        InterruptionPlanner().apply_policy(_request("d", policy="replace_all"), active, [equal_priority])
+    cancelled, preserved = InterruptionPlanner(allow_replace_all=True).apply_policy(_request("e", policy="replace_all"), active, [equal_priority])
+    assert cancelled == [active.request_id, equal_priority.request_id]
+    assert preserved == []
+
+
+@pytest.mark.asyncio
+async def test_same_priority_is_fifo_and_events_are_monotonic() -> None:
+    service = SpeechService(_adapter)
+    first, second = _request("f"), _request("g")
+    first_runtime = await service.submit(first, [_segment(first)])
+    await service.submit(second, [_segment(second)])
+    assert service.queue_position(first.request_id) == 1
+    assert service.queue_position(second.request_id) == 2
+    assert [event.sequence for event in first_runtime.events] == [1, 2, 3, 4]
+    assert [event.event for event in first_runtime.events] == ["accepted", "normalization_completed", "queued", "segment_queued"]
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_queue_capacity_and_pending_cancellation_are_enforced() -> None:
+    service = SpeechService(_adapter, max_requests=1)
+    first = _request("h")
+    runtime = await service.submit(first, [_segment(first)])
+    with pytest.raises(QueueFullError):
+        second = _request("i")
+        await service.submit(second, [_segment(second)])
+    await service.cancel(first.request_id)
+    assert runtime.request.status == RequestStatus.CANCELLED
+    assert runtime.request.cancel_reason == "client_request"
+    assert runtime.events[-1].event == "cancelled"
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_aging_is_bounded_and_can_overtake_one_priority_point() -> None:
+    service = SpeechService(_adapter, aging_interval=30, aging_max_bonus=10)
+    older, newer = _request("j", priority=50), _request("k", priority=51)
+    await service.submit(older, [_segment(older)])
+    await service.submit(newer, [_segment(newer)])
+    older.queued_at = datetime.now(timezone.utc) - timedelta(seconds=60)
+    assert service._next()[2] == older.request_id
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_active_cancellation_and_client_disconnect_finish_the_request() -> None:
+    service = SpeechService(_adapter)
+    active = _request("l")
+    runtime = await service.submit(active, [_segment(active)])
+    service.active_id = active.request_id
+    await service.cancel(active.request_id)
+    assert active.status == RequestStatus.CANCELLING
+    await service._finish_cancel(runtime)
+    assert active.status == RequestStatus.CANCELLED
+
+    disconnected = _request("m")
+    disconnected_runtime = await service.submit(disconnected, [_segment(disconnected)])
+    waiting_client = asyncio.create_task(anext(service.audio_stream(disconnected_runtime)))
+    await asyncio.sleep(0)
+    waiting_client.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting_client
+    assert disconnected.status == RequestStatus.CANCELLED
+    assert disconnected.cancel_reason == "client_disconnected"
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_pcm_backpressure_cancels_a_stalled_client() -> None:
+    service = SpeechService(_adapter, max_buffered_seconds=0)
+    await service.start()
+    request = _request("n")
+    runtime = await service.submit(request, [_segment(request)])
+    await asyncio.wait_for(runtime.done.wait(), 2)
+    assert request.status == RequestStatus.CANCELLED
+    assert request.cancel_reason == "client_stalled"
+    assert service.metrics["client_stall_total"] == 1
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_completed_request_preserves_every_queued_pcm_block() -> None:
+    async def multi_block_adapter(segment: SpeechSegment, cancelled: asyncio.Event):
+        for block in (b"first", b"middle", b"last"):
+            yield block
+
+    service = SpeechService(multi_block_adapter)
+    await service.start()
+    request = _request("o")
+    runtime = await service.submit(request, [_segment(request)])
+    await asyncio.wait_for(runtime.done.wait(), 2)
+    await asyncio.sleep(0)
+    delivered = b"".join([block async for block in service.audio_stream(runtime)])
+    assert request.status == RequestStatus.COMPLETED
+    assert delivered == b"firstmiddlelast"
     await service.stop()

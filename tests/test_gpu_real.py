@@ -32,36 +32,24 @@ def _request(path: str, *, method: str = "GET", payload: dict | None = None):
 @pytest.mark.gpu
 @pytest.mark.skipif(not RUN_GPU_TESTS, reason="set AEGIS_TTS_RUN_GPU_TESTS=1 to run the real GPU test")
 def test_running_gpu_service_returns_a_wav_without_downloading_anything() -> None:
-    """Exercise a previously started service with its already-imported voice."""
+    """Exercise the production gateway without exposing a voice asset."""
 
     try:
-        with _request("/health/ready") as response:
+        with _request("/ready") as response:
             assert response.status == 200
-        with _request("/v1/voices") as response:
-            voices = json.load(response)
     except HTTPError as error:  # Keep diagnostics concise if the service is not ready.
         pytest.fail(f"GPU service was not ready: HTTP {error.code}")
 
-    default_voice = voices["default_voice"]
     with _request(
-        "/v1/synthesize",
+        "/v1/audio/speech",
         method="POST",
         payload={
-            "text": "Olá. Este é um teste opcional da Aegis.",
-            "voice": default_voice,
-            "language": "pt-BR",
-            "seed": 42,
-            "generation_parameters": {
-                "temperature": 0.8,
-                "top_p": 0.9,
-                "do_sample": True,
-                "max_new_tokens": 256,
-            },
+            "input": "Olá. Este é um teste opcional da Aegis.",
+            "response_format": "wav",
         },
     ) as response:
         audio = response.read()
         assert response.status == 200
         assert response.headers.get_content_type() == "audio/wav"
         assert audio.startswith(b"RIFF")
-        assert response.headers.get("X-Aegis-TTS-RTF") is not None
-
+        assert response.headers.get("X-Aegis-Voice-Profile") == "AegisVoicev1.0-Q00-W04-P07-M02"
