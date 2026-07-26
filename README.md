@@ -8,6 +8,43 @@ O gateway usa a imagem vLLM-Omni fixada por digest e o modelo
 `Qwen3-TTS-12Hz-0.6B-Base`. Ele mantém a referência e a transcrição no mount
 local `protected/AegisVoicev1.0`, nunca no request, nos logs ou na imagem.
 
+## Usos principais
+
+O serviço expõe três usos básicos:
+
+- health: liveness; o processo está ativo.
+- ready: readiness; o serviço já terminou o warm-up e pode atender TTS.
+- TTS sem streaming: gerar um WAV completo antes de receber a resposta.
+- TTS com streaming: receber o áudio em fluxo, útil para reprodução imediata.
+
+Exemplos rápidos:
+
+```bash
+curl -f http://127.0.0.1:8001/health
+curl -f http://127.0.0.1:8001/ready
+```
+
+Use `health` para saber se o container/processo ainda está saudável. Use
+`ready` para saber se ele já está apto a receber solicitações de TTS.
+
+TTS sem streaming:
+
+```bash
+curl --fail-with-body http://127.0.0.1:8001/v1/audio/speech \
+  -H 'content-type: application/json' \
+  -d '{"input":"Teste curto da Aegis.","response_format":"wav","stream":false}' \
+  --output resposta.wav
+```
+
+TTS com streaming:
+
+```bash
+curl --fail-with-body http://127.0.0.1:8001/v1/audio/speech \
+  -H 'content-type: application/json' \
+  -d '{"input":"Teste curto da Aegis.","response_format":"pcm","stream":true}' \
+  --output resposta.pcm
+```
+
 ## Operação
 
 Os diretórios `models/`, `cache/` e a referência privada sob
@@ -22,7 +59,8 @@ curl -f http://127.0.0.1:8001/health
 curl -f http://127.0.0.1:8001/ready
 ```
 
-O Compose publica somente `127.0.0.1:8001` por padrão. Consulte
+O Compose publica `0.0.0.0:8001` por padrão, permitindo acesso pela rede conforme
+as regras de firewall. Consulte
 [docs/API.md](docs/API.md) para os contratos HTTP e
 [docs/repository-inventory.md](docs/repository-inventory.md) para a decisão de
 dependências e retenção.
