@@ -28,10 +28,9 @@ def test_gateway_includes_a_same_origin_pcm_streaming_player() -> None:
     assert "stream: true" in gateway
 
 
-def test_api_documentation_explains_default_and_custom_references() -> None:
+def test_api_documentation_explains_the_server_owned_default_reference() -> None:
     documentation = (ROOT / "docs" / "API.md").read_text(encoding="utf-8")
 
-    assert "giselle_AegisVoice3.wav" in documentation
     assert "POST /v1/audio/speech" in documentation
-    assert "ref_audio" in documentation
-    assert "ref_text" in documentation
+    assert "assets locais protegidos" in documentation
+    assert "podem selecioná-las ou substituí-las" in documentation

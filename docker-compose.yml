@@ -1,6 +1,5 @@
 services:
   # Default production runtime: validated vLLM-Omni 0.6B Base configuration.
-  # Roll back to docker-compose.eager-1.7b.yml if required.
   aegis-tts:
     build:
       context: .
@@ -16,7 +15,6 @@ services:
       - ./models/Qwen3-TTS-12Hz-0.6B-Base:/models/Qwen3-TTS-12Hz-0.6B-Base:ro
       - ./cache/vllm-omni:/cache
       - ./protected/AegisVoicev1.0:/protected:ro
-      - ./diagnostics:/diagnostics:ro
     environment:
       CUDA_VISIBLE_DEVICES: "0"
       NVIDIA_VISIBLE_DEVICES: "0"
