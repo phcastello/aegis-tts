@@ -1,1 +1,0 @@
-from .chatterbox_ptbr import RegionalChatterbox, validate_checkpoint_identity

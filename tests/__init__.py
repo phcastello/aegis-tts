@@ -1,2 +1,0 @@
-"""Aegis TTS test package."""
-

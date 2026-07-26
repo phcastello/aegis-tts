@@ -1,5 +1,0 @@
-A Aegis integra PostgreSQL, Qdrant, Docker, Entity Framework e serviços OpenAI. Este teste avalia naturalidade, inteligibilidade, pronúncia de termos técnicos e conforto auditivo antes de escolher o preset padrão.
-
-Pedro, a reunião ficou marcada para segunda-feira, vinte e sete de julho de dois mil e vinte e seis.
-
-Foram processadas 1.024 amostras.
