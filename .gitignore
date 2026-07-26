@@ -32,4 +32,8 @@ reports/
 *.flac
 *.mp3
 *.ogg
-protected/AegisVoicev1.0/reference/Aninha_AegisVoice4.txt
+
+# The protected voice bundle is a versioned deployment input, including audio
+# and reference transcripts.
+!protected/
+!protected/**
