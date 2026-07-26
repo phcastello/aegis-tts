@@ -31,6 +31,10 @@ Não há import dinâmico, subprocesso, `PYTHONPATH`, mount, configuração,
 manifest ou script de produção que alcance `app/`, `diagnostics/`, `tools/`
 ou o laboratório removido. A única referência histórica necessária à seleção
 W04/P07/M02 é a cópia congelada e hashada em `protected/AegisVoicev1.0/code/`.
+Os manifests e a proveniência imutáveis desse perfil também registram paths
+absolutos do laboratório e do perfil v0.1 como evidência da seleção histórica;
+eles não são carregados pelo runtime e não podem ser editados sem invalidar os
+hashes aprovados.
 
 ## Histórico experimental
 
