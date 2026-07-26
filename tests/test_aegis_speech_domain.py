@@ -193,3 +193,21 @@ async def test_pcm_backpressure_cancels_a_stalled_client() -> None:
     assert request.cancel_reason == "client_stalled"
     assert service.metrics["client_stall_total"] == 1
     await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_completed_request_preserves_every_queued_pcm_block() -> None:
+    async def multi_block_adapter(segment: SpeechSegment, cancelled: asyncio.Event):
+        for block in (b"first", b"middle", b"last"):
+            yield block
+
+    service = SpeechService(multi_block_adapter)
+    await service.start()
+    request = _request("o")
+    runtime = await service.submit(request, [_segment(request)])
+    await asyncio.wait_for(runtime.done.wait(), 2)
+    await asyncio.sleep(0)
+    delivered = b"".join([block async for block in service.audio_stream(runtime)])
+    assert request.status == RequestStatus.COMPLETED
+    assert delivered == b"firstmiddlelast"
+    await service.stop()

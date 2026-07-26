@@ -143,15 +143,20 @@ class SpeechService:
             self.metrics["cancelled_total"] += 1
             self.event(runtime, "cancelled", reason=runtime.request.cancel_reason or "client_request")
             runtime.done.set()
-            await self._close_audio(runtime)
+            await self._close_audio(runtime, discard=True)
 
-    async def _close_audio(self, runtime: Runtime) -> None:
-        while not runtime.audio.empty():
-            try: runtime.audio.get_nowait()
-            except asyncio.QueueEmpty: break
-        runtime.buffered_bytes = 0
-        try: runtime.audio.put_nowait(None)
-        except asyncio.QueueFull: pass
+    async def _close_audio(self, runtime: Runtime, *, discard: bool = False) -> None:
+        if discard:
+            while not runtime.audio.empty():
+                try: runtime.audio.get_nowait()
+                except asyncio.QueueEmpty: break
+            runtime.buffered_bytes = 0
+            try: runtime.audio.put_nowait(None)
+            except asyncio.QueueFull: pass
+            return
+        # Successful requests must preserve every queued PCM block.  Draining
+        # here races a non-streaming HTTP consumer and truncates the tail.
+        await runtime.audio.put(None)
 
     async def _run(self) -> None:
         while True:
@@ -237,7 +242,7 @@ class SpeechService:
                 request.transition(RequestStatus.FAILED)
                 self.metrics["failed_total"] += 1
                 self.event(runtime, "failed", error_code=request.error_code)
-                runtime.done.set(); await self._close_audio(runtime)
+                runtime.done.set(); await self._close_audio(runtime, discard=True)
 
     async def audio_stream(self, runtime: Runtime) -> AsyncIterator[bytes]:
         try:
