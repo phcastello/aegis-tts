@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Callable
 
 
@@ -25,6 +26,7 @@ _ONES = ("zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito
 _TEENS = ("dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove")
 _TENS = ("", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa")
 _HUNDREDS = ("", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos")
+_MONTHS = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro")
 
 
 def number_to_words(value: int) -> str:
@@ -87,19 +89,41 @@ class SpeechTextNormalizer:
         def protect(value: str) -> str:
             protected.append(value)
             return chr(0xE000 + len(protected) - 1)
-        # URLs/email are expanded predictably; they are never fetched.
-        replace(r"https?://[^\s]+", lambda m: protect(m.group(0)), "protect_url", re.I)
+
+        # The interface can present links visually. Say so instead of reading a
+        # noisy URL aloud, while preserving terminal punctuation for pacing.
+        def replace_url(match: re.Match[str]) -> str:
+            value = match.group(0)
+            trailing = re.search(r"[.,;:!?]+$", value)
+            return "você pode ver o link pela interface" + (trailing.group(0) if trailing else "")
+        replace(r"https?://[^\s]+", replace_url, "replace_url", re.I)
         replace(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", lambda m: protect(m.group(0)), "protect_email", re.I)
         replace(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", lambda m: protect(m.group(0)), "protect_ip")
         replace(r"\b\d+(?:\.\d+){2,}\b", lambda m: protect(m.group(0)), "protect_version")
 
-        replace(r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b", lambda m: f"{number_to_words(int(m[1]))} de {('janeiro fevereiro março abril maio junho julho agosto setembro outubro novembro dezembro'.split()[int(m[2])-1])} de {number_to_words(int(m[3]))}", "date")
+        # Remove presentational Markdown while retaining the text it surrounds.
+        replace(r"(?<!\w)(\*{1,3}|_{1,3})(?=\S)(.+?)(?<=\S)\1(?!\w)", lambda m: m[2], "remove_markdown_emphasis")
+        replace(r"[()]", lambda _m: " ", "remove_parentheses")
+
+        def speak_date(day: str, month: str, year: str) -> str:
+            try:
+                parsed = date(int(year) if len(year) == 4 else 2000 + int(year), int(month), int(day))
+            except ValueError:
+                # Leave malformed dates untouched for the remaining numeric rules.
+                return f"{day}/{month}/{year}"
+            return f"{number_to_words(parsed.day)} de {_MONTHS[parsed.month - 1]} de {number_to_words(parsed.year)}"
+
+        replace(r"\b(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})\b", lambda m: speak_date(m[1], m[2], m[3]), "date")
+        replace(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", lambda m: speak_date(m[3], m[2], m[1]), "iso_date")
         replace(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", lambda m: f"{number_to_words(int(m[1]))} horas e {number_to_words(int(m[2]))} minutos", "time")
         replace(r"\b(\d+)h(\d{1,2})?\b", lambda m: f"{number_to_words(int(m[1]))} horas" + (f" e {number_to_words(int(m[2]))} minutos" if m[2] else ""), "duration")
         replace(r"([+-]?\d+(?:[.,]\d+)?)\s*%", lambda m: self._decimal(m[1]) + " por cento", "percentage")
         units = {"°C": "graus Celsius", "GB": "gigabytes", "MB": "megabytes", "KB": "kilobytes", "TB": "terabytes", "Hz": "hertz", "kHz": "quilohertz", "MHz": "megahertz", "GHz": "gigahertz", "W": "watts", "V": "volts", "A": "amperes", "km": "quilômetros", "cm": "centímetros", "mm": "milímetros", "m": "metros", "B": "bytes"}
         unit_re = "|".join(re.escape(u) for u in sorted(units, key=len, reverse=True))
         replace(rf"([+-]?\d+(?:[.,]\d+)?)\s*({unit_re})\b", lambda m: self._decimal(m[1]) + " " + units[m[2]], "unit")
+        # A token containing both letters and digits is an identifier, not a
+        # pronounceable word. Separate every character so the TTS spells it.
+        replace(r"(?<!\w)(?=[A-Za-z0-9_-]*[A-Za-z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*(?!\w)", lambda m: " ".join({"-": "hífen", "_": "sublinhado"}.get(char, char) for char in m.group(0)), "spell_alphanumeric_code")
         replace(r"(?<![\w.])([+-]?\d+[.,]\d+)(?!\w|[.,]\d)", lambda m: self._decimal(m[1]), "decimal")
         replace(r"(?<![\w.])-?\d+(?!\w|\.\d)", lambda m: number_to_words(int(m.group(0))), "integer")
 
@@ -133,7 +157,12 @@ class SpeechTextNormalizer:
         if self.lexicon:
             out, applied = self.lexicon(out)
             for item in applied: rules["lexicon:" + item] = rules.get("lexicon:" + item, 0) + 1
+        # Remaining uppercase tokens are acronyms (including IATA airport
+        # codes). Apply this after the lexicon so configured pronunciations,
+        # such as DNS and VPN, remain authoritative.
+        replace(r"(?<!\w)[A-Z]{2,}(?!\w)", lambda m: " ".join(m.group(0)), "spell_uppercase_acronym")
         out = out.replace("/", " barra ").replace("=", " igual a ").replace("+", " mais ").replace("*", " vezes ")
+        out = re.sub(r"\s+([,.;:!?])", r"\1", out)
         out = re.sub(r"\s+", " ", out).strip()
         if not out:
             raise ValueError("normalization produced empty text")

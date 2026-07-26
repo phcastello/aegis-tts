@@ -10,7 +10,7 @@ services:
     entrypoint: []
     command: ["/usr/bin/bash", "/gateway/run-vllm-with-default-reference.sh"]
     ports:
-      - "${AEGIS_TTS_BIND_ADDRESS:-127.0.0.1}:${AEGIS_TTS_PORT:-8001}:8001"
+      - "${AEGIS_TTS_BIND_ADDRESS:-0.0.0.0}:${AEGIS_TTS_PORT:-8001}:8001"
     volumes:
       - ./models/Qwen3-TTS-12Hz-0.6B-Base:/models/Qwen3-TTS-12Hz-0.6B-Base:ro
       - ./cache/vllm-omni:/cache

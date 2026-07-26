@@ -28,6 +28,12 @@ def normalizer() -> SpeechTextNormalizer:
     ("Agora são 14:35.", "Agora são quatorze horas e trinta e cinco minutos."),
     ("A temperatura é de -3,5 °C.", "A temperatura é de menos três vírgula cinco graus Celsius."),
     ("O uso chegou a 3,5 GB.", "O uso chegou a três vírgula cinco gigabytes."),
+    ("Leia https://blablabla; depois continue.", "Leia você pode ver o link pela interface; depois continue."),
+    ("Texto **em negrito** (observação).", "Texto em negrito observação."),
+    ("A data é 05/03/24 e o prazo 2026-07-26.", "A data é cinco de março de dois mil e vinte e quatro e o prazo vinte e seis de julho de dois mil e vinte e seis."),
+    ("Código 8UCI92.", "Código oito U C I nove dois."),
+    ("Código AB-12.", "Código A B hífen um dois."),
+    ("A API usa DNS e VPN entre GRU, MAD e LGW.", "A A P I usa dê ene ésse e vê pê ene entre G R U, M A D e L G W."),
 ])
 def test_required_normalization_cases(source: str, expected: str) -> None:
     assert normalizer().normalize(source).normalized_text == expected
