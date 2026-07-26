@@ -7,6 +7,7 @@ ready local service and opt in with ``AEGIS_TTS_RUN_GPU_TESTS=1``.
 
 from __future__ import annotations
 
+import json
 import os
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen

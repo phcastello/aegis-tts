@@ -41,6 +41,20 @@ pytest -q
 o perfil protegido. A comparação acústica/auditiva requer o corpus e os assets
 privados locais; não há WAV privado no repositório.
 
+## Smoke operacional
+
+Com o serviço pronto, execute um smoke sem gravar áudio no repositório:
+
+```bash
+python3 scripts/smoke-test.py
+```
+
+Ele verifica `/health`, `/ready`, métricas e fila, OpenAI WAV, Aegis WAV,
+PCM streaming, SSE e cancelamento explícito. Um WAV de 44 bytes é tratado
+como falha: ele contém apenas o cabeçalho e deve ser investigado antes da
+integração da Aegis. Para outra porta, use
+`python3 scripts/smoke-test.py --base-url http://127.0.0.1:PORTA`.
+
 ## Estrutura
 
 ```text
