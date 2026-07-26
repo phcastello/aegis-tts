@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -144,4 +145,51 @@ async def test_queue_capacity_and_pending_cancellation_are_enforced() -> None:
     assert runtime.request.status == RequestStatus.CANCELLED
     assert runtime.request.cancel_reason == "client_request"
     assert runtime.events[-1].event == "cancelled"
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_aging_is_bounded_and_can_overtake_one_priority_point() -> None:
+    service = SpeechService(_adapter, aging_interval=30, aging_max_bonus=10)
+    older, newer = _request("j", priority=50), _request("k", priority=51)
+    await service.submit(older, [_segment(older)])
+    await service.submit(newer, [_segment(newer)])
+    older.queued_at = datetime.now(timezone.utc) - timedelta(seconds=60)
+    assert service._next()[2] == older.request_id
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_active_cancellation_and_client_disconnect_finish_the_request() -> None:
+    service = SpeechService(_adapter)
+    active = _request("l")
+    runtime = await service.submit(active, [_segment(active)])
+    service.active_id = active.request_id
+    await service.cancel(active.request_id)
+    assert active.status == RequestStatus.CANCELLING
+    await service._finish_cancel(runtime)
+    assert active.status == RequestStatus.CANCELLED
+
+    disconnected = _request("m")
+    disconnected_runtime = await service.submit(disconnected, [_segment(disconnected)])
+    waiting_client = asyncio.create_task(anext(service.audio_stream(disconnected_runtime)))
+    await asyncio.sleep(0)
+    waiting_client.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting_client
+    assert disconnected.status == RequestStatus.CANCELLED
+    assert disconnected.cancel_reason == "client_disconnected"
+    await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_pcm_backpressure_cancels_a_stalled_client() -> None:
+    service = SpeechService(_adapter, max_buffered_seconds=0)
+    await service.start()
+    request = _request("n")
+    runtime = await service.submit(request, [_segment(request)])
+    await asyncio.wait_for(runtime.done.wait(), 2)
+    assert request.status == RequestStatus.CANCELLED
+    assert request.cancel_reason == "client_stalled"
+    assert service.metrics["client_stall_total"] == 1
     await service.stop()
