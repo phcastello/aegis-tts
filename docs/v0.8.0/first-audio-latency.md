@@ -375,3 +375,12 @@ A promoção conservadora se apoia em PCM idêntico, microganhos mensuráveis e
 melhora comprovada na estabilidade/responsividade, conforme a política de
 promoção da tarefa. Não implica ter atingido a meta de primeiro áudio útil em
 um segundo nem a meta global da Aegis.
+
+
+O build limpo usa as mesmas versões declaradas, porém recompila `pyworld` e
+resolve dependências transitivas novamente. A imagem de implantação usa
+`gateway/Dockerfile.runtime-overlay`, baseada na imagem operacional retida,
+cujo ID deve ser conferido antes de construir. Assim os binários WORLD,
+vLLM/Omni, Torch e todas as dependências permanecem byte a byte os mesmos;
+somente o gateway é substituído. O Dockerfile normal continua como receita de
+build limpo; sua imagem de ensaio não foi promovida nesta tarefa.

@@ -1,0 +1,13 @@
+# Preserve the exact installed vLLM and compiled DSP binaries on this host.
+# Before building, verify that this retained tag still resolves to
+# sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491.
+# The regular Dockerfile remains the clean-build recipe, tested separately.
+FROM aegis-tts-gateway:rollback-20261031-6174bb8
+
+ARG AEGIS_SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$AEGIS_SOURCE_COMMIT
+LABEL org.opencontainers.image.base.digest="sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491"
+ENV AEGIS_TTS_SOURCE_COMMIT=$AEGIS_SOURCE_COMMIT
+
+COPY gateway /gateway
+RUN chmod 0555 /gateway/run-vllm-with-default-reference.sh
