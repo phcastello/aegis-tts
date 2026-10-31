@@ -1,0 +1,234 @@
+{
+  "api_schema": {
+    "initial_codec_chunk_frames_supported": true,
+    "non_streaming_mode_field_supported": false,
+    "top_level_temperature_field_supported": false
+  },
+  "base_conditioning": {
+    "gateway_flag_absent_from_api_schema": true,
+    "gateway_requested_non_streaming_mode": true,
+    "installed_source_base_default_non_streaming_mode": false,
+    "note": "Source inspection; no request or model execution. Preserve the running conditioning when optimizing latency."
+  },
+  "container": {
+    "compose_project": "aegis-tts",
+    "compose_service": "aegis-tts",
+    "created": "2026-10-21T13:25:05.991093039Z",
+    "id": "924896d8b297b2fe494ce863a8ffb45fcc3526ad1f6fcbe1e86f4e3ae151fb56",
+    "image_id": "sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491",
+    "running": true
+  },
+  "deploy_read_error": null,
+  "deploy_selected_numeric_settings": [
+    {
+      "path": "async_chunk",
+      "value": true
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.shm_threshold_bytes",
+      "value": 65536
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.codec_streaming",
+      "value": true
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.connector_get_sleep_s",
+      "value": 0.01
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.connector_get_max_wait_first_chunk",
+      "value": 3000
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.connector_get_max_wait",
+      "value": 300
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.codec_chunk_frames",
+      "value": 25
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.codec_left_context_frames",
+      "value": 72
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.initial_codec_chunk_frames",
+      "value": 1
+    },
+    {
+      "path": "connectors.connector_of_shared_memory.extra.decode_cudagraph_capture_sizes",
+      "value": [
+        25,
+        73,
+        97,
+        169,
+        325
+      ]
+    },
+    {
+      "path": "stages[0].max_num_seqs",
+      "value": 1
+    },
+    {
+      "path": "stages[0].gpu_memory_utilization",
+      "value": 0.4
+    },
+    {
+      "path": "stages[0].enable_prefix_caching",
+      "value": true
+    },
+    {
+      "path": "stages[0].async_scheduling",
+      "value": true
+    },
+    {
+      "path": "stages[0].max_num_batched_tokens",
+      "value": 512
+    },
+    {
+      "path": "stages[0].max_model_len",
+      "value": 4096
+    },
+    {
+      "path": "stages[0].default_sampling_params.temperature",
+      "value": 0.05
+    },
+    {
+      "path": "stages[0].default_sampling_params.top_p",
+      "value": 0.3
+    },
+    {
+      "path": "stages[0].default_sampling_params.top_k",
+      "value": 1
+    },
+    {
+      "path": "stages[0].default_sampling_params.min_tokens",
+      "value": 0
+    },
+    {
+      "path": "stages[0].default_sampling_params.max_tokens",
+      "value": 1024
+    },
+    {
+      "path": "stages[0].default_sampling_params.seed",
+      "value": 40733133
+    },
+    {
+      "path": "stages[0].default_sampling_params.repetition_penalty",
+      "value": 1.15
+    },
+    {
+      "path": "stages[0].subtalker_sampling_params.do_sample",
+      "value": true
+    },
+    {
+      "path": "stages[0].subtalker_sampling_params.temperature",
+      "value": 0.9
+    },
+    {
+      "path": "stages[0].subtalker_sampling_params.top_k",
+      "value": 50
+    },
+    {
+      "path": "stages[0].subtalker_sampling_params.top_p",
+      "value": 1.0
+    },
+    {
+      "path": "stages[1].max_num_seqs",
+      "value": 1
+    },
+    {
+      "path": "stages[1].gpu_memory_utilization",
+      "value": 0.4
+    },
+    {
+      "path": "stages[1].enforce_eager",
+      "value": false
+    },
+    {
+      "path": "stages[1].enable_prefix_caching",
+      "value": false
+    },
+    {
+      "path": "stages[1].async_scheduling",
+      "value": true
+    },
+    {
+      "path": "stages[1].max_num_batched_tokens",
+      "value": 65536
+    },
+    {
+      "path": "stages[1].max_model_len",
+      "value": 65536
+    },
+    {
+      "path": "stages[1].default_sampling_params.temperature",
+      "value": 0.0
+    },
+    {
+      "path": "stages[1].default_sampling_params.top_p",
+      "value": 1.0
+    },
+    {
+      "path": "stages[1].default_sampling_params.top_k",
+      "value": -1
+    },
+    {
+      "path": "stages[1].default_sampling_params.max_tokens",
+      "value": 65536
+    },
+    {
+      "path": "stages[1].default_sampling_params.seed",
+      "value": 41
+    },
+    {
+      "path": "stages[1].default_sampling_params.repetition_penalty",
+      "value": 1.0
+    },
+    {
+      "path": "platforms.npu.stages[0].enforce_eager",
+      "value": true
+    }
+  ],
+  "gateway_q00_numeric_settings": {
+    "max_tokens": 1024,
+    "min_tokens": 0,
+    "non_streaming_mode": true,
+    "repetition_penalty": 1.15,
+    "seed": 40733133,
+    "temperature": 0.05,
+    "top_k": 1,
+    "top_p": 0.3
+  },
+  "gateway_source_sha256": {
+    "aegis_speech/service.py": "b8e5416eca6e2ae38e360a7463783bdb73eaf31092bb473b274015194f9c4d7a",
+    "default_reference_gateway.py": "2c1b179ec11c1668b2edc445e359b678f954192b0fcc076f9d2f6e3edec3a7cd",
+    "voice_pipeline.py": "db5530a5689a073ea0c4f6747a96f6d0d6655b3fc4d456c502e952f4f328b23a"
+  },
+  "image": {
+    "id": "sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491",
+    "repo_digests": [
+      "aegis-tts-gateway@sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491"
+    ],
+    "source_revision": "799c3afa5d5b17b676d04e0b58a5628943bb4003",
+    "version": "vllm/vllm-openai:v0.22.0"
+  },
+  "installed_omni_source_sha256": {
+    "entrypoints/openai/protocol/audio.py": "b050d2ba6fdb1672000519f39f0504d749de3936d36cf9db3c32beaf3a306c39",
+    "entrypoints/openai/serving_speech.py": "c917d31bbe6966923fcd1c40af3fd11bf5a545bb415f5a032214b866dd731511",
+    "model_executor/models/qwen3_tts/prompt_embeds_builder.py": "459a719835613f5fca691d5765f4f93ae02137a6df9077e6fe3a4ebf8678e053",
+    "model_executor/models/qwen3_tts/qwen3_tts_code2wav.py": "e8522c38ef73912f773c0a18e8820602d744981e6bcbdc2748f59ed6bff7833f",
+    "model_executor/stage_input_processors/qwen3_tts.py": "8146939adbfe15d65c0aea9c10e83a38c48f100dd6b9ea4098e134610a308b0b"
+  },
+  "packages": {
+    "numpy": "1.26.4",
+    "pyworld": "0.3.4",
+    "scipy": "1.13.1",
+    "torch": "2.11.0+cu130",
+    "transformers": "5.8.1",
+    "vllm": "0.22.0",
+    "vllm-omni": "0.22.0"
+  },
+  "schema": "aegis-tts-runtime-inspection-v1"
+}

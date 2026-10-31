@@ -9,7 +9,7 @@ acoustic boundaries selected.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from time import perf_counter
+from time import perf_counter, thread_time
 from typing import Iterable
 
 import numpy as np
@@ -73,6 +73,11 @@ class PipelineMetrics:
     first_render_started_seconds: float | None = None
     first_render_finished_seconds: float | None = None
     world_seconds: float = 0.0
+    # Same-thread CPU in WORLD and render/master operations, respectively;
+    # transport waiting, buffer copies and boundary selection are excluded.
+    world_cpu_seconds: float = 0.0
+    dsp_cpu_seconds: float = 0.0
+    first_render_cpu_seconds: float | None = None
 
     @property
     def mean_rtf(self) -> float:
@@ -89,20 +94,24 @@ class StatefulM02:
         self._hpf_zi = np.zeros((self._hpf.shape[0], 2), dtype=np.float64)
         self._band_zi = np.zeros((self._band.shape[0], 2), dtype=np.float64)
         self._envelope = 0.0
-        self._attack = np.exp(-1.0 / max(sample_rate * 0.002, 1.0))
-        self._release = np.exp(-1.0 / max(sample_rate * 0.045, 1.0))
+        self._attack = float(np.exp(-1.0 / max(sample_rate * 0.002, 1.0)))
+        self._release = float(np.exp(-1.0 / max(sample_rate * 0.045, 1.0)))
 
     def process(self, samples: np.ndarray) -> np.ndarray:
         if not len(samples):
             return np.empty(0, dtype=np.float64)
         high_passed, self._hpf_zi = sosfilt(self._hpf, samples, zi=self._hpf_zi)
         band, self._band_zi = sosfilt(self._band, high_passed, zi=self._band_zi)
-        envelope = np.empty(len(band), dtype=np.float64)
+        envelope_values: list[float] = []
         previous = self._envelope
-        for index, level in enumerate(np.abs(band)):
+        # Native doubles avoid NumPy scalar dispatch in this sequential
+        # detector. Keep the same operation order and IEEE double precision;
+        # the filter, detector state and resulting PCM remain unchanged.
+        for level in memoryview(np.abs(band)):
             coefficient = self._attack if level > previous else self._release
             previous = coefficient * previous + (1.0 - coefficient) * level
-            envelope[index] = previous
+            envelope_values.append(previous)
+        envelope = np.asarray(envelope_values, dtype=np.float64)
         self._envelope = previous
         threshold = 10.0 ** (-30.0 / 20.0)
         excess_db = np.maximum(0.0, 20.0 * np.log10(np.maximum(envelope, 1e-12) / threshold))
@@ -184,12 +193,14 @@ class AcousticStreamProcessor:
 
     def finish(self) -> list[bytes]:
         output = self._drain(final=True)
+        tail_cpu_started = thread_time()
         if len(self._held_tail):
             output.append(self._encode(self._master.process(self._held_tail)))
             self._held_tail = np.empty(0, dtype=np.float64)
         tail = self._master.flush()
         if len(tail):
             output.append(self._encode(tail))
+        self.metrics.dsp_cpu_seconds += thread_time() - tail_cpu_started
         return output
 
     def process_offline(self, samples: np.ndarray) -> bytes:
@@ -231,6 +242,7 @@ class AcousticStreamProcessor:
             if left_padding or right_padding:
                 analysis_samples = np.pad(analysis_samples, (left_padding, right_padding))
             render_started = perf_counter()
+            render_cpu_started = thread_time()
             if self.metrics.first_render_started_seconds is None:
                 self.metrics.first_render_started_seconds = render_started - self._started
                 self.metrics.first_render_received_samples = self.metrics.audio_received_samples
@@ -245,14 +257,18 @@ class AcousticStreamProcessor:
             # WORLD timing is measured around each complete analysis/render.
             elapsed = max(perf_counter() - render_started, 0.0)
             self.metrics.world_seconds += elapsed
+            self.metrics.world_cpu_seconds += thread_time() - render_cpu_started
             self.metrics.segment_rtf.append(elapsed / max(useful_length / self.sample_rate, 1e-9))
             if natural:
                 self.metrics.natural_segments += 1
             else:
                 self.metrics.hard_seams += 1
             output.extend(self._join_and_master(useful, hard=not natural))
+            render_cpu_seconds = thread_time() - render_cpu_started
+            self.metrics.dsp_cpu_seconds += render_cpu_seconds
             if self.metrics.first_render_finished_seconds is None:
                 self.metrics.first_render_finished_seconds = perf_counter() - self._started
+                self.metrics.first_render_cpu_seconds = render_cpu_seconds
             self._first_segment = False
             self._next_start = end
             self._compact()

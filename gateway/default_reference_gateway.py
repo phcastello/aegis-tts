@@ -12,6 +12,7 @@ import base64
 import hashlib
 import os
 import io
+import json
 import wave
 import secrets
 import re
@@ -171,6 +172,7 @@ async def lifespan(app: FastAPI):
     _check_dsp_imports()
     AcousticStreamProcessor(SAMPLE_RATE, initial_segment=INITIAL_SEGMENT)
     app.state.default_audio, app.state.default_text = _load_default_reference()
+    app.state.segment_request_prefix = _segment_request_prefix()
     app.state.client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=httpx.Timeout(900.0, connect=5.0))
     app.state.synthesis_slot = asyncio.Semaphore(1)
     app.state.metrics = GatewayMetrics()
@@ -345,6 +347,22 @@ def _apply_defaults(payload: dict[str, Any]) -> dict[str, Any]:
     return request
 
 
+def _segment_request_prefix() -> bytes:
+    # Only server-owned, startup-fixed fields are cached. Text is serialized
+    # separately for every segment; no request or generated audio is retained.
+    invariants = _apply_defaults({"stream": True, "response_format": "pcm"})
+    return json.dumps(invariants, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")[:-1] + b',"input":'
+
+
+def _segment_upstream_request(text: str) -> httpx.Request:
+    prefix = getattr(app.state, "segment_request_prefix", None)
+    if prefix is None:  # Lightweight callers/tests without gateway startup.
+        payload = _apply_defaults({"input": text, "stream": True, "response_format": "pcm"})
+        return app.state.client.build_request("POST", "/v1/audio/speech", json=payload)
+    body = b"".join((prefix, json.dumps(text, ensure_ascii=False, allow_nan=False).encode("utf-8"), b"}"))
+    return app.state.client.build_request("POST", "/v1/audio/speech", content=body, headers={"Content-Type": "application/json"})
+
+
 def _response_headers(upstream: httpx.Response) -> dict[str, str]:
     allowed = ("content-type", "content-disposition")
     headers = {name: upstream.headers[name] for name in allowed if name in upstream.headers}
@@ -471,9 +489,10 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
     """One Qwen request per text segment; acoustic settings remain server-owned."""
     started = perf_counter()
     stamps: dict[str, float] = {}
-    payload = _apply_defaults({"input": segment.normalized_text, "stream": True, "response_format": "pcm"})
+    upstream_request = _segment_upstream_request(segment.normalized_text)
+    stamps["request_prepared_ms"] = (perf_counter() - started) * 1000
     try:
-        upstream = await app.state.client.send(app.state.client.build_request("POST", "/v1/audio/speech", json=payload), stream=True)
+        upstream = await app.state.client.send(upstream_request, stream=True)
     except httpx.HTTPError as exc:
         raise RuntimeError("upstream unavailable") from exc
     if upstream.is_error:
@@ -553,9 +572,13 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
                 app.state.service.event(runtime, "synthesis_profiled", segment_index=segment.segment_index,
                     initial_segment=INITIAL_SEGMENT, cancelled=cancelled.is_set(), **stamps,
                     dsp_ms=dsp_seconds * 1000, world_ms=metrics.world_seconds * 1000,
+                    world_cpu_ms=metrics.world_cpu_seconds * 1000,
+                    render_cpu_ms=metrics.dsp_cpu_seconds * 1000,
+                    first_dsp_cpu_ms=metrics.first_render_cpu_seconds * 1000 if metrics.first_render_cpu_seconds is not None else None,
                     first_dsp_input_audio_ms=metrics.first_render_received_samples / SAMPLE_RATE * 1000,
                     first_dsp_start_ms=processor_offset_ms + metrics.first_render_started_seconds * 1000 if metrics.first_render_started_seconds is not None else None,
                     first_dsp_end_ms=processor_offset_ms + metrics.first_render_finished_seconds * 1000 if metrics.first_render_finished_seconds is not None else None,
+                    adapter_eof_ms=(perf_counter() - started) * 1000,
                     audio_received_ms=received_samples / SAMPLE_RATE * 1000,
                     audio_emitted_ms=metrics.audio_emitted_samples / SAMPLE_RATE * 1000)
 
@@ -668,11 +691,14 @@ async def models() -> Response:
 
 
 async def _submit_native(payload: dict[str, Any]) -> Runtime:
+    validation_started = perf_counter()
     speech = _native_request(payload)
+    validation_ms = (perf_counter() - validation_started) * 1000
     try:
         normalizing_started = perf_counter()
         result = app.state.normalizer.normalize(speech.original_text)
-        app.state.metrics.values["aegis_tts_normalization_seconds"] += perf_counter() - normalizing_started
+        normalization_seconds = perf_counter() - normalizing_started
+        app.state.metrics.values["aegis_tts_normalization_seconds"] += normalization_seconds
         speech.normalized_text = result.normalized_text
     except ValueError as exc:
         code = "TEXT_TOO_LONG" if "maximum length" in str(exc) else "NORMALIZATION_FAILED"
@@ -680,12 +706,17 @@ async def _submit_native(payload: dict[str, Any]) -> Runtime:
     try:
         segmentation_started = perf_counter()
         drafts = app.state.segmenter.segment(result)
-        app.state.metrics.values["aegis_tts_segmentation_seconds"] += perf_counter() - segmentation_started
+        segmentation_seconds = perf_counter() - segmentation_started
+        app.state.metrics.values["aegis_tts_segmentation_seconds"] += segmentation_seconds
     except ValueError as exc:
         raise _native_error(422, "SEGMENTATION_FAILED", speech.request_id) from exc
     segments = [SpeechSegment(speech.request_id, item.segment_index, item.original_text, item.normalized_text, SegmentStatus.QUEUED, max(1.0, len(item.normalized_text) / 80), original_span=item.original_span, normalized_span=item.normalized_span, split_reason=item.split_reason) for item in drafts]
     try:
-        return await app.state.service.submit(speech, segments)
+        runtime = await app.state.service.submit(speech, segments)
+        if PROFILE_LATENCY:
+            app.state.service.event(runtime, "preparation_profiled", validation_ms=validation_ms,
+                normalization_ms=normalization_seconds * 1000, segmentation_ms=segmentation_seconds * 1000)
+        return runtime
     except QueueFullError as exc:
         raise _native_error(429, "QUEUE_FULL", speech.request_id) from exc
     except BusyError as exc:
