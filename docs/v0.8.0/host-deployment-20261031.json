@@ -1,0 +1,377 @@
+{
+  "schema": "aegis-tts-rollout-v1",
+  "source_commit": "ba1beb9eff78eedf1df1b71ceb94b8539bccad43",
+  "branch": "perf/v0.8.0-host-first-audio",
+  "image": "aegis-tts-gateway:latency-ba1beb9",
+  "image_id": "sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa",
+  "repo_digests": [
+    "aegis-tts-gateway@sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa"
+  ],
+  "container_id": "4cb8c390eb8c8ce57804c2dbdfb1f0c9ed0e7952e15ab869051d693f9399b40d",
+  "health": "healthy",
+  "restarts": 0,
+  "original_image_id": "sha256:6174bb849eea90fbe2fff51153a70cb3489585c7c052b4fed404a9239278f491",
+  "rollback_tag": "aegis-tts-gateway:rollback-20261031-6174bb8",
+  "readiness_poll_seconds": 142.96967903198674,
+  "profile_latency": false,
+  "initial_segment": "stable",
+  "models": {
+    "object": "list",
+    "data": [
+      {
+        "id": "/models/Qwen3-TTS-12Hz-0.6B-Base",
+        "object": "model",
+        "created": 1793480805,
+        "owned_by": "vllm",
+        "root": "/models/Qwen3-TTS-12Hz-0.6B-Base",
+        "parent": null,
+        "max_model_len": 4096,
+        "permission": [
+          {
+            "id": "modelperm-ac76fa6629463f33",
+            "object": "model_permission",
+            "created": 1793480805,
+            "allow_create_engine": false,
+            "allow_sampling": true,
+            "allow_logprobs": true,
+            "allow_search_indices": false,
+            "allow_view": true,
+            "allow_fine_tuning": false,
+            "organization": "*",
+            "group": null,
+            "is_blocking": false
+          }
+        ]
+      }
+    ]
+  },
+  "queue_after": {
+    "active_request_id": null,
+    "queued_requests": 0,
+    "queued_segments": 0,
+    "limits": {
+      "max_requests": 32,
+      "max_segments": 128,
+      "max_total_characters": 50000
+    }
+  },
+  "idle_docker_stats": {
+    "CPUPerc": "16.54%",
+    "MemUsage": "4.887GiB / 23.47GiB",
+    "PIDs": "312"
+  },
+  "runtime_after": {
+    "api_schema": {
+      "initial_codec_chunk_frames_supported": true,
+      "non_streaming_mode_field_supported": false,
+      "top_level_temperature_field_supported": false
+    },
+    "base_conditioning": {
+      "gateway_flag_absent_from_api_schema": true,
+      "gateway_requested_non_streaming_mode": true,
+      "installed_source_base_default_non_streaming_mode": false,
+      "note": "Source inspection; no request or model execution. Preserve the running conditioning when optimizing latency."
+    },
+    "container": {
+      "compose_project": "aegis-tts",
+      "compose_service": "aegis-tts",
+      "created": "2026-10-31T20:57:50.989554033Z",
+      "id": "4cb8c390eb8c8ce57804c2dbdfb1f0c9ed0e7952e15ab869051d693f9399b40d",
+      "image_id": "sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa",
+      "running": true
+    },
+    "deploy_read_error": null,
+    "deploy_selected_numeric_settings": [
+      {
+        "path": "async_chunk",
+        "value": true
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.shm_threshold_bytes",
+        "value": 65536
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.codec_streaming",
+        "value": true
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.connector_get_sleep_s",
+        "value": 0.01
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.connector_get_max_wait_first_chunk",
+        "value": 3000
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.connector_get_max_wait",
+        "value": 300
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.codec_chunk_frames",
+        "value": 25
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.codec_left_context_frames",
+        "value": 72
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.initial_codec_chunk_frames",
+        "value": 1
+      },
+      {
+        "path": "connectors.connector_of_shared_memory.extra.decode_cudagraph_capture_sizes",
+        "value": [
+          25,
+          73,
+          97,
+          169,
+          325
+        ]
+      },
+      {
+        "path": "stages[0].max_num_seqs",
+        "value": 1
+      },
+      {
+        "path": "stages[0].gpu_memory_utilization",
+        "value": 0.4
+      },
+      {
+        "path": "stages[0].enable_prefix_caching",
+        "value": true
+      },
+      {
+        "path": "stages[0].async_scheduling",
+        "value": true
+      },
+      {
+        "path": "stages[0].max_num_batched_tokens",
+        "value": 512
+      },
+      {
+        "path": "stages[0].max_model_len",
+        "value": 4096
+      },
+      {
+        "path": "stages[0].default_sampling_params.temperature",
+        "value": 0.05
+      },
+      {
+        "path": "stages[0].default_sampling_params.top_p",
+        "value": 0.3
+      },
+      {
+        "path": "stages[0].default_sampling_params.top_k",
+        "value": 1
+      },
+      {
+        "path": "stages[0].default_sampling_params.min_tokens",
+        "value": 0
+      },
+      {
+        "path": "stages[0].default_sampling_params.max_tokens",
+        "value": 1024
+      },
+      {
+        "path": "stages[0].default_sampling_params.seed",
+        "value": 40733133
+      },
+      {
+        "path": "stages[0].default_sampling_params.repetition_penalty",
+        "value": 1.15
+      },
+      {
+        "path": "stages[0].subtalker_sampling_params.do_sample",
+        "value": true
+      },
+      {
+        "path": "stages[0].subtalker_sampling_params.temperature",
+        "value": 0.9
+      },
+      {
+        "path": "stages[0].subtalker_sampling_params.top_k",
+        "value": 50
+      },
+      {
+        "path": "stages[0].subtalker_sampling_params.top_p",
+        "value": 1.0
+      },
+      {
+        "path": "stages[1].max_num_seqs",
+        "value": 1
+      },
+      {
+        "path": "stages[1].gpu_memory_utilization",
+        "value": 0.4
+      },
+      {
+        "path": "stages[1].enforce_eager",
+        "value": false
+      },
+      {
+        "path": "stages[1].enable_prefix_caching",
+        "value": false
+      },
+      {
+        "path": "stages[1].async_scheduling",
+        "value": true
+      },
+      {
+        "path": "stages[1].max_num_batched_tokens",
+        "value": 65536
+      },
+      {
+        "path": "stages[1].max_model_len",
+        "value": 65536
+      },
+      {
+        "path": "stages[1].default_sampling_params.temperature",
+        "value": 0.0
+      },
+      {
+        "path": "stages[1].default_sampling_params.top_p",
+        "value": 1.0
+      },
+      {
+        "path": "stages[1].default_sampling_params.top_k",
+        "value": -1
+      },
+      {
+        "path": "stages[1].default_sampling_params.max_tokens",
+        "value": 65536
+      },
+      {
+        "path": "stages[1].default_sampling_params.seed",
+        "value": 41
+      },
+      {
+        "path": "stages[1].default_sampling_params.repetition_penalty",
+        "value": 1.0
+      },
+      {
+        "path": "platforms.npu.stages[0].enforce_eager",
+        "value": true
+      }
+    ],
+    "gateway_q00_numeric_settings": {
+      "max_tokens": 1024,
+      "min_tokens": 0,
+      "non_streaming_mode": true,
+      "repetition_penalty": 1.15,
+      "seed": 40733133,
+      "temperature": 0.05,
+      "top_k": 1,
+      "top_p": 0.3
+    },
+    "gateway_source_sha256": {
+      "aegis_speech/service.py": "750447a38a2e06f621acd3ab96ce922a062b76ce308fb725422b7f76e6241d71",
+      "default_reference_gateway.py": "4385c7172cfaa90e7f33f03ec91bf32f06dc8117589c2966d93f7c89ef035788",
+      "voice_pipeline.py": "6c7fe13b5953f73e8d052ce54d449556b4f33dda57197b0ed3f5fe973bafbf8f"
+    },
+    "image": {
+      "id": "sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa",
+      "repo_digests": [
+        "aegis-tts-gateway@sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa"
+      ],
+      "source_revision": "ba1beb9eff78eedf1df1b71ceb94b8539bccad43",
+      "version": "vllm/vllm-openai:v0.22.0"
+    },
+    "installed_omni_source_sha256": {
+      "entrypoints/openai/protocol/audio.py": "b050d2ba6fdb1672000519f39f0504d749de3936d36cf9db3c32beaf3a306c39",
+      "entrypoints/openai/serving_speech.py": "c917d31bbe6966923fcd1c40af3fd11bf5a545bb415f5a032214b866dd731511",
+      "model_executor/models/qwen3_tts/prompt_embeds_builder.py": "459a719835613f5fca691d5765f4f93ae02137a6df9077e6fe3a4ebf8678e053",
+      "model_executor/models/qwen3_tts/qwen3_tts_code2wav.py": "e8522c38ef73912f773c0a18e8820602d744981e6bcbdc2748f59ed6bff7833f",
+      "model_executor/stage_input_processors/qwen3_tts.py": "8146939adbfe15d65c0aea9c10e83a38c48f100dd6b9ea4098e134610a308b0b"
+    },
+    "packages": {
+      "numpy": "1.26.4",
+      "pyworld": "0.3.4",
+      "scipy": "1.13.1",
+      "torch": "2.11.0+cu130",
+      "transformers": "5.8.1",
+      "vllm": "0.22.0",
+      "vllm-omni": "0.22.0"
+    },
+    "schema": "aegis-tts-runtime-inspection-v1"
+  },
+  "world_binaries_identical": true,
+  "gateway_sources_match_checkout": true,
+  "original_mounts_preserved": true,
+  "tests": {
+    "pytest_with_gpu": "54 passed",
+    "smoke_test": "passed",
+    "validate_profile": "passed",
+    "validate_lexicon": "passed",
+    "pronunciation_corpus": "passed",
+    "golden_regression_existing_integrity_check": "passed",
+    "compose_config": "passed",
+    "protected_git_diff": "unchanged"
+  },
+  "production_before_summary_ms": {
+    "headers_ms": {
+      "mean": 16.66239659405417,
+      "median": 16.66786288842559,
+      "max": 17.14106509461999
+    },
+    "first_pcm_ms": {
+      "mean": 1646.1323518306017,
+      "median": 1639.8371062241495,
+      "max": 1691.3465992547572
+    },
+    "first_nonsilent_ms": {
+      "mean": 1646.6137314111822,
+      "median": 1640.2114070951939,
+      "max": 1691.9959019869566
+    },
+    "eof_ms": {
+      "mean": 3769.0671179961,
+      "median": 2457.8836988657713,
+      "max": 6846.6584999114275
+    },
+    "leading_nonsilent_audio_ms": {
+      "mean": 485.8611111111111,
+      "median": 588.625,
+      "max": 592.9166666666666
+    },
+    "estimated_first_audible_playback_ms": {
+      "mean": 2131.993462941713,
+      "median": 2216.0113078045347,
+      "max": 2279.971599254757
+    }
+  },
+  "production_after_summary_ms": {
+    "headers_ms": {
+      "mean": 4.286904146687852,
+      "median": 4.16941475123167,
+      "max": 9.874834679067135
+    },
+    "first_pcm_ms": {
+      "mean": 1649.904668227666,
+      "median": 1635.5101019144058,
+      "max": 1769.882784690708
+    },
+    "first_nonsilent_ms": {
+      "mean": 1650.3426810312603,
+      "median": 1635.8365039341152,
+      "max": 1770.24148683995
+    },
+    "eof_ms": {
+      "mean": 3752.1329047675763,
+      "median": 2489.930694922805,
+      "max": 6598.386245314032
+    },
+    "leading_nonsilent_audio_ms": {
+      "mean": 500.97685185185185,
+      "median": 588.625,
+      "max": 592.9166666666666
+    },
+    "estimated_first_audible_playback_ms": {
+      "mean": 2150.881520079518,
+      "median": 2213.844668261707,
+      "max": 2343.3411180240414
+    }
+  },
+  "all_observations_retained": true,
+  "ttfa_interpretation": "No substantial reproducible HTTP TTFA reduction; worker responsiveness and isolated CPU/serialization savings support conservative promotion.",
+  "codec22_status": "not promoted: PCM differences require owner listening review"
+}

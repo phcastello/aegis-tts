@@ -355,7 +355,7 @@ intermediárias e resultados dos replays, estão em
 [host-benchmark-20261031.json](host-benchmark-20261031.json). Raw direto e
 replay usam o texto inteiro do corpus; a API nativa segmenta o caso longo.
 EOF e duração dessas duas modalidades não devem ser comparados como se fossem
-a mesma requisição. O benefício de22 frames usa apenas as coortes de captura
+a mesma requisição. O benefício de 22 frames usa apenas as coortes de captura
 inteira com a mesma política DSP; a variância entre gerações está preservada.
 
 Para repetir, execute o benchmark no container existente com a fonte candidata
@@ -384,3 +384,136 @@ cujo ID deve ser conferido antes de construir. Assim os binários WORLD,
 vLLM/Omni, Torch e todas as dependências permanecem byte a byte os mesmos;
 somente o gateway é substituído. O Dockerfile normal continua como receita de
 build limpo; sua imagem de ensaio não foi promovida nesta tarefa.
+
+
+### Implantação concluída e verificação em produção
+
+**Produção foi efetivamente substituída pelo Compose**, com a imagem
+`aegis-tts-gateway:latency-ba1beb9`, digest/ID
+`sha256:78046393d0c3c712ad0ea1a278d8f909f482de477a89fa888907196198f31aaa`,
+fonte `ba1beb9eff78eedf1df1b71ceb94b8539bccad43`.
+Container atual: `4cb8c390eb8c8ce57804c2dbdfb1f0c9ed0e7952e15ab869051d693f9399b40d`.
+Os commits de implementação são `e316497` e `ba1beb9`, enviados à branch
+`perf/v0.8.0-host-first-audio`. O commit posterior de relatório não muda o
+código na imagem. A imagem de build limpo `latency-e316497` não foi implantada.
+
+Houve uma única recarga do modelo necessária à troca: readiness retornou após
+aproximadamente 143 s a partir do início da sondagem pós-up. Não houve reinício
+para descobrir versão ou produzir cold start. O container ficou saudável, com
+restart count 0. Os três endpoints `/health`, `/ready`, `/health/ready` responderam
+200; header de revisão e variante `stable` foram conferidos. O modelo carregado
+continua o mesmo, com max_model_len 4096. Mounts, dispositivos GPU e comando
+foram comparados diretamente com o inspect original e permanecem idênticos.
+Os arquivos de gateway instalados correspondem ao checkout. Versões, fontes
+Omni e hashes dos binários WORLD são idênticos ao runtime anterior.
+
+O Compose operacional usa `.env` privado, ignorado por Git, para fixar imagem,
+Dockerfile overlay e SHA. A variante permanece `stable`, codec inicial 1 e
+contínuo 25. `AEGIS_TTS_PROFILE_LATENCY=0` foi mantido em produção desde o início;
+o profiling detalhado só existiu nos gateways CPU temporários, encerrados na
+substituição do container. Nenhum áudio ou referência é impresso nos logs da instrumentação.
+
+| Coorte HTTP nativa (9 chamadas cada) | Antes: média / mediana / máximo (ms) | Depois: média / mediana / máximo (ms) |
+| --- | ---: | ---: |
+| Headers | 16,7 / 16,7 / 17,1 | 4,3 / 4,2 / 9,9 |
+| Primeiro PCM | 1.646,1 / 1.639,8 / 1.691,3 | 1.649,9 / 1.635,5 / 1.769,9 |
+| Bloco contendo PCM não silencioso | 1.646,6 / 1.640,2 / 1.692,0 | 1.650,3 / 1.635,8 / 1.770,2 |
+| EOF | 3.769,1 / 2.457,9 / 6.846,7 | 3.752,1 / 2.489,9 / 6.598,4 |
+| Reprodução audível estimada, com silêncio inicial | 2.132,0 / 2.216,0 / 2.280,0 | 2.150,9 / 2.213,8 / 2.343,3 |
+
+A última linha supõe reprodução imediata e contínua do primeiro sample; não
+mede alto-falante, Android, rede móvel ou pipeline global da Aegis.
+
+A primeira chamada observada após readiness foi 1.769,9 ms, com 3,59 s de áudio;
+ela não foi excluída. A primeira da coorte anterior foi 1.674,8 ms com 2,95 s.
+As primeiras gerações de cada texto após a troca variaram; nas repetições 2 e 3,
+os três casos produziram PCM completo bit a bit igual ao observado antes.
+A prova principal de preservação do DSP continua sendo o replay do mesmo raw,
+que eliminou essa variância de geração. Sem a primeira observação de cada
+coorte, as médias foram 1.642,6 e 1.634,9 ms, respectivamente; esse recorte também
+não comprova um ganho substancial. Não se promoveu uma configuração acústica
+para melhorar artificialmente o benchmark.
+
+**Não houve redução substancial e reproduzível do primeiro PCM HTTP.** A média
+com todas as observações ficou 3,8 ms maior, a mediana 4,3 ms menor, dentro da
+variação observada. Aproximadamente 25–30 ms de preparação/mastering foram
+removidos nos ensaios isolados; não devem ser anunciados como redução HTTP
+garantida. A promoção conservadora foi feita pelo benefício operacional
+comprovado do worker e menor trabalho redundante, mantendo PCM idêntico,
+conforme a exceção explícita de estabilidade na política da tarefa.
+
+O bruto original foi medido em quatro segmentos diagnósticos (316,9–375,3 ms)
+e nove capturas diretas (314,0–357,1 ms); na candidata com profiling, os
+primeiros segmentos ficaram 299,7–346,2 ms. Em produção atual, os gauges das
+seis chamadas curtas registraram304,1–408,4 ms, incluindo a primeira chamada
+observada. As coortes e origens estão identificadas no JSON; não são subtraídas
+como relógios sincronizados. Nos casos longos, gauges coletados após EOF se
+referem ao último segmento, enquanto o primeiro PCM HTTP pertence ao primeiro;
+eles estão nomeados `last_segment_gauges` para não confundir essa correlação.
+Primeiro codec e tempo de kernel GPU por pedido permanecem não disponíveis
+na telemetria instalada; o período até o primeiro bruto não foi inventado em
+subetapas.
+
+Em repouso após os checks: aproximadamente 4,887 GiB no container, 15,5% CPU,
+GPU 0%,10.674 MiB de VRAM (antes:4,895 GiB, 16,3%, 0%, 10.676 MiB). A alocação
+continua aproximadamente constante e não demonstra economia de GPU.
+Nas janelas de amostragem: GPU 0–100%, pico de potência 68,1 W antes e 68,4 W
+depois; pico Docker CPU 356,8% e 206,9%, respectivamente. As janelas contêm
+operações diferentes (diagnósticos/replay antes; benchmark/smoke/checks depois),
+portanto esses picos/médias não sustentam alegação de ganho comparativo de
+throughput ou custo GPU. O ensaio CPU no mesmo raw isolou a redução de cerca
+de 2,9% no trabalho DSP dos segmentos analisados. Concorrência continua limitada
+a uma síntese; não se realizou teste de carga ou reivindicou mais capacidade.
+
+Após a troca, `scripts/smoke-test.py` passou com OpenAI WAV, Aegis WAV/PCM,
+SSE e cancelamento. A suíte completa com GPU opt-in passou com **54 passed**.
+Perfil, léxico, corpus de pronúncia, golden regression e Compose passaram de
+novo. Fila final vazia, 13 pedidos completos, 1 cancelamento esperado do smoke,
+0 falhas de síntese no novo processo. Não há clipping nos replays, resíduos
+PCM, perdas introduzidas ou mudança de estado acústico nas comparações iguais.
+Os warnings pkg_resources existentes não alteraram o resultado.
+
+O snapshot de implantação e os agregados completos estão em
+[host-deployment-20261031.json](host-deployment-20261031.json). Os resultados
+individuais antes/depois, inclusive a primeira chamada mais lenta, permanecem
+em [host-benchmark-20261031.json](host-benchmark-20261031.json).
+
+Rollback preparado, sem apagar dados:
+
+```bash
+/var/tmp/aegis-tts-latency-20261031/rollback.sh
+```
+
+O script restaura o `.env` anterior (ausente antes desta tarefa) e usa o snapshot
+Compose original com a tag retida `rollback-20261031-6174bb8`, mesmo projeto,
+volumes e mounts. A imagem original foi preservada; rollback não precisou ser
+executado. Para reconstruir a candidata, confira primeiro o ID da base retida,
+use o Dockerfile overlay e o SHA indicado no `.env`. O overlay não copia assets protegidos; `protected/` fica fora do
+contexto de build.
+
+### O que ainda depende de decisão ou trabalho posterior
+
+Os pares WAV privados estão em `/var/tmp/aegis-tts-latency-20261031/capture/`
+e `/var/tmp/aegis-tts-latency-20261031/initial22/`, com instruções em `REVIEW.txt`.
+O override 22 ganha aproximadamente 300 ms no replay, porém modifica PCM.
+Após WORLD, os casos curtos diferiram em até 6–8 unidades PCM16; os longos
+tiveram diferenças maiores (correlação alinhada ~0,929 nas repetições 2/3), além
+de uma geração com duração diferente entre coortes. Isso reforça a necessidade
+de ouvir consoantes, números, pitch, formantes e emendas antes da promoção.
+Não se declarou equivalência perceptiva nem se publicou áudio.
+
+A versão atual já suporta esse override inicial; não exige upgrade amplo.
+Alterar o chunk contínuo ou instrumentar início de inferência/codec por ID
+exige outra candidata de runtime/configuração, com compatibilidade, qualidade,
+CPU/GPU, cauda e rollback próprios. Não há evidência de que trocar apenas a
+versão do vLLM resolva a meta de um segundo. A análise confrontou a fonte
+instalada com a [Speech API oficial](https://docs.vllm.ai/projects/vllm-omni/en/stable/serving/speech_api/)
+e a [receita Qwen3-TTS](https://github.com/vllm-project/vllm-omni/blob/main/recipes/Qwen/Qwen3-TTS.md);
+opções da documentação recente não foram presumidas disponíveis.
+
+A espera pelo segundo lote e o custo WORLD dominam o limite observado. O
+silêncio inicial no áudio é outro componente de reprodução, cuja remoção pode
+alterar consoantes/ritmo e não foi autorizada por simples ganho numérico.
+A meta global de aproximadamente quatro segundos continua dependendo também
+das outras etapas da Aegis. Nenhum arquivo ou serviço do repositório principal
+foi alterado nesta tarefa.
