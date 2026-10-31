@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: ${AEGIS_GATEWAY_DOCKERFILE:-gateway/Dockerfile}
+      args:
+        AEGIS_SOURCE_COMMIT: ${AEGIS_TTS_SOURCE_COMMIT:-unknown}
     image: ${AEGIS_GATEWAY_IMAGE:-aegis-tts-gateway:aegisvoicev1.0}
     container_name: aegis-tts
     restart: unless-stopped
@@ -31,6 +33,8 @@ services:
       AEGIS_VLLM_BACKEND_URL: http://127.0.0.1:8091
       AEGIS_VLLM_DEPLOY_CONFIG: /protected/config/q00-vllm-deploy-exact.yaml
       AEGIS_ALLOW_REPLACE_ALL: ${AEGIS_ALLOW_REPLACE_ALL:-0}
+      AEGIS_TTS_INITIAL_SEGMENT: ${AEGIS_TTS_INITIAL_SEGMENT:-stable}
+      AEGIS_TTS_PROFILE_LATENCY: ${AEGIS_TTS_PROFILE_LATENCY:-0}
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     shm_size: 8gb

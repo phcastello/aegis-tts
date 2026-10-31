@@ -34,6 +34,8 @@ class Runtime:
     buffered_bytes: int = 0
     events: deque[Event] = field(default_factory=lambda: deque(maxlen=256))
     sequence: int = 0
+    created_monotonic: float = field(default_factory=monotonic)
+    queued_monotonic: float = field(default_factory=monotonic)
 
 
 class QueueFullError(RuntimeError): pass
@@ -75,7 +77,7 @@ class SpeechService:
         self._stopping = False
         self.active_id: str | None = None
         self.planner = InterruptionPlanner(allow_replace_all)
-        self.metrics: dict[str, float] = {"requests_total": 0, "completed_total": 0, "cancelled_total": 0, "failed_total": 0, "segments_generated_total": 0, "client_stall_total": 0}
+        self.metrics: dict[str, float] = {"requests_total": 0, "completed_total": 0, "cancelled_total": 0, "failed_total": 0, "segments_generated_total": 0, "client_stall_total": 0, "queue_wait_seconds": 0}
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="aegis-speech-worker")
@@ -90,7 +92,7 @@ class SpeechService:
 
     def event(self, runtime: Runtime, name: str, **data: object) -> None:
         runtime.sequence += 1
-        runtime.events.append(Event(runtime.sequence, name, runtime.request.request_id, datetime.now(timezone.utc).isoformat(), data))
+        runtime.events.append(Event(runtime.sequence, name, runtime.request.request_id, datetime.now(timezone.utc).isoformat(), {"elapsed_ms": (monotonic() - runtime.created_monotonic) * 1000, **data}))
 
     async def submit(self, request: SpeechRequest, segments: list[SpeechSegment]) -> Runtime:
         if request.request_id in self.runtimes:
@@ -103,7 +105,7 @@ class SpeechService:
         cancelled, _ = self.planner.apply_policy(request, active, queued)
         for request_id in cancelled:
             await self.cancel(request_id, "policy")
-        runtime = Runtime(request, segments)
+        runtime = Runtime(request, segments, created_monotonic=request.created_monotonic)
         self.runtimes[request.request_id] = runtime
         self.event(runtime, "accepted")
         request.transition(RequestStatus.NORMALIZING)
@@ -117,6 +119,7 @@ class SpeechService:
 
     def _push(self, request_id: str, segment_index: int) -> None:
         runtime = self.runtimes[request_id]
+        runtime.queued_monotonic = monotonic()
         self.event(runtime, "segment_queued", segment_index=segment_index)
         # The heap base is recalculated by worker for aging; sequence preserves FIFO.
         heapq.heappush(self._heap, (-runtime.request.priority, next(self._counter), request_id, segment_index))
@@ -193,7 +196,9 @@ class SpeechService:
         try:
             request.transition(RequestStatus.GENERATING)
             segment.status, segment.started_at = SegmentStatus.GENERATING, datetime.now(timezone.utc)
-            self.event(runtime, "generation_started", segment_index=index)
+            queue_wait = monotonic() - runtime.queued_monotonic
+            self.metrics["queue_wait_seconds"] += queue_wait
+            self.event(runtime, "generation_started", segment_index=index, queue_wait_ms=queue_wait * 1000)
             first = True
             tail = b""
             async for pcm in self.adapter(segment, runtime.cancel):

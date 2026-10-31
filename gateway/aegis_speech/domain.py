@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from time import monotonic
 
 
 def now() -> datetime:
@@ -62,6 +63,7 @@ class SpeechRequest:
     cancelled_at: datetime | None = None
     error_code: str | None = None
     cancel_reason: str | None = None
+    created_monotonic: float = field(default_factory=monotonic)
 
     def transition(self, status: RequestStatus) -> None:
         if status == self.status:

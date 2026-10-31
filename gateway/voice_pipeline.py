@@ -69,6 +69,10 @@ class PipelineMetrics:
     hard_seams: int = 0
     invalid_residual_bytes: int = 0
     segment_rtf: list[float] = field(default_factory=list)
+    first_render_received_samples: int = 0
+    first_render_started_seconds: float | None = None
+    first_render_finished_seconds: float | None = None
+    world_seconds: float = 0.0
 
     @property
     def mean_rtf(self) -> float:
@@ -147,8 +151,11 @@ def _transform_f0(f0: np.ndarray, state: StreamingVoiceState, sample_rate: int) 
 class AcousticStreamProcessor:
     """Segmented WORLD W04/P07 followed by one continuous M02 chain."""
 
-    def __init__(self, sample_rate: int = 24000) -> None:
+    def __init__(self, sample_rate: int = 24000, *, initial_segment: str = "stable") -> None:
+        if initial_segment not in {"stable", "initial-quiet-900ms-v1"}:
+            raise ValueError("unsupported initial acoustic segment")
         self.sample_rate = sample_rate
+        self.initial_segment = initial_segment
         self.left_context = round(sample_rate * 0.200)
         self.right_lookahead = round(sample_rate * 0.200)
         self.minimum = round(sample_rate * 0.900)
@@ -162,6 +169,8 @@ class AcousticStreamProcessor:
         self._held_tail = np.empty(0, dtype=np.float64)
         self._previous_hard = False
         self.metrics = PipelineMetrics()
+        self._started = perf_counter()
+        self._first_segment = True
 
     @property
     def buffered_seconds(self) -> float:
@@ -207,7 +216,8 @@ class AcousticStreamProcessor:
             # Wait for the whole fixed boundary-search range.  This makes the
             # selected boundary independent of HTTP chunk sizes and keeps the
             # first processed audio within the 1.3--2.0 s target.
-            if not final and available < self.target + self.right_lookahead + self.search_radius:
+            _, target, search_radius = self._segment_limits()
+            if not final and available < target + self.right_lookahead + search_radius:
                 break
             useful_length, natural = self._choose_segment(available, final=final)
             if useful_length <= 0:
@@ -221,6 +231,9 @@ class AcousticStreamProcessor:
             if left_padding or right_padding:
                 analysis_samples = np.pad(analysis_samples, (left_padding, right_padding))
             render_started = perf_counter()
+            if self.metrics.first_render_started_seconds is None:
+                self.metrics.first_render_started_seconds = render_started - self._started
+                self.metrics.first_render_received_samples = self.metrics.audio_received_samples
             rendered = self._render_world(
                 analysis_samples,
                 useful_start=left_padding + start - analysis_start,
@@ -231,37 +244,62 @@ class AcousticStreamProcessor:
             self.metrics.audio_processed_samples += useful_length
             # WORLD timing is measured around each complete analysis/render.
             elapsed = max(perf_counter() - render_started, 0.0)
+            self.metrics.world_seconds += elapsed
             self.metrics.segment_rtf.append(elapsed / max(useful_length / self.sample_rate, 1e-9))
             if natural:
                 self.metrics.natural_segments += 1
             else:
                 self.metrics.hard_seams += 1
             output.extend(self._join_and_master(useful, hard=not natural))
+            if self.metrics.first_render_finished_seconds is None:
+                self.metrics.first_render_finished_seconds = perf_counter() - self._started
+            self._first_segment = False
             self._next_start = end
             self._compact()
             if final and len(self._samples) - self._next_start == 0:
                 break
         return output
 
+    def _segment_limits(self) -> tuple[int, int, int]:
+        # This is an explicitly named experimental variant. The 200 ms
+        # analysis context and every subsequent segment keep the approved
+        # settings; no voice/model/sampling/profile asset is changed.
+        if self._first_segment and self.initial_segment == "initial-quiet-900ms-v1":
+            return round(self.sample_rate * .750), round(self.sample_rate * .900), round(self.sample_rate * .150)
+        return self.minimum, self.target, self.search_radius
+
     def _choose_segment(self, available: int, *, final: bool) -> tuple[int, bool]:
         if final and available <= self.maximum:
             return available, True
         upper = min(self.maximum, available - (0 if final else self.right_lookahead))
-        if upper < self.minimum:
+        minimum, target, search_radius = self._segment_limits()
+        if self._first_segment and self.initial_segment == "initial-quiet-900ms-v1":
+            # An early forced seam can cut a word and changes the amount of
+            # blending. Only advance a natural quiet boundary. If none exists,
+            # wait for and use exactly the stable first-window decision.
+            begin = minimum
+            finish = min(upper, target + search_radius)
+            candidate = self._quiet_boundary(begin, finish, desired=target)
+            if candidate is not None:
+                return candidate, True
+            if not final and available < self.target + self.right_lookahead + self.search_radius:
+                return 0, True
+            minimum, target, search_radius = self.minimum, self.target, self.search_radius
+        if upper < minimum:
             return (available, True) if final else (0, True)
-        lower = self.minimum
-        desired = min(max(self.target, lower), upper)
-        begin = max(lower, desired - self.search_radius)
-        finish = min(upper, desired + self.search_radius)
+        lower = minimum
+        desired = min(max(target, lower), upper)
+        begin = max(lower, desired - search_radius)
+        finish = min(upper, desired + search_radius)
         # A 35 ms quiet region is a usable silence/unvoiced boundary.  The
         # threshold is relative to the current useful window so quiet speech
         # is not mistaken for digital silence.
-        candidate = self._quiet_boundary(begin, finish)
+        candidate = self._quiet_boundary(begin, finish, desired=target)
         if candidate is not None:
             return candidate, True
         return self._zero_crossing_boundary(begin, finish, desired), False
 
-    def _quiet_boundary(self, begin: int, finish: int) -> int | None:
+    def _quiet_boundary(self, begin: int, finish: int, *, desired: int | None = None) -> int | None:
         frame = max(1, round(self.sample_rate * 0.035))
         source = self._samples[self._next_start : self._next_start + finish]
         if len(source) < frame:
@@ -275,7 +313,7 @@ class AcousticStreamProcessor:
                 candidates.append(end)
         if not candidates:
             return None
-        desired = min(max(self.target, begin), finish)
+        desired = min(max(self.target if desired is None else desired, begin), finish)
         return min(candidates, key=lambda value: abs(value - desired))
 
     def _zero_crossing_boundary(self, begin: int, finish: int, desired: int) -> int:
