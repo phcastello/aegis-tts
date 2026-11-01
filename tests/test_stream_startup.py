@@ -150,6 +150,33 @@ async def test_task_cancel_during_hold_cancels_generation_and_keeps_request_isol
 
 
 @pytest.mark.asyncio
+async def test_upstream_failure_during_hold_discards_already_dequeued_first_pcm() -> None:
+    async def adapter(segment, cancelled):
+        yield b"\x01\x00" * 40
+        await asyncio.sleep(.01)
+        raise RuntimeError("synthetic upstream generation failure")
+
+    service = SpeechService(adapter, stream_startup_seconds=.05)
+    item = request()
+    runtime = await service.submit(item, [segment(item)])
+    await service.start()
+    stream = service.audio_stream(runtime)
+    first = asyncio.create_task(anext(stream))
+    try:
+        await asyncio.wait_for(runtime.done.wait(), .2)
+        assert item.status == RequestStatus.FAILED
+        assert not runtime.cancel.is_set()  # Failure is distinct from DELETE.
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(first, .2)
+        assert runtime.buffered_bytes == 0
+        assert not runtime.stream_startup_holding
+        assert not [event for event in runtime.events if event.event == "stream_startup_released"]
+    finally:
+        await stream.aclose()
+        await service.stop()
+
+
+@pytest.mark.asyncio
 async def test_generator_close_after_first_audio_cooperatively_cancels_rest() -> None:
     async def adapter(segment, cancelled):
         yield b"\x01\x00" * 40

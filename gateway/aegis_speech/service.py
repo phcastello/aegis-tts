@@ -274,7 +274,9 @@ class SpeechService:
             await asyncio.wait_for(runtime.cancel.wait(), timeout=self.stream_startup_seconds)
         except asyncio.TimeoutError:
             pass
-        if runtime.cancel.is_set():
+        if runtime.cancel.is_set() or runtime.request.status in {
+            RequestStatus.FAILED, RequestStatus.CANCELLED, RequestStatus.CANCELLING
+        }:
             return False
         runtime.stream_startup_holding = False
         self.event(runtime, "stream_startup_released", configured_ms=self.stream_startup_seconds * 1000,
