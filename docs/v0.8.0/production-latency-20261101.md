@@ -185,7 +185,7 @@ Profiling detalhado é opt-in por env ou arquivo operacional efêmero
 outra recarga da GPU. O modo cotidiano é env 0 e arquivo ausente. Eventos não
 contêm texto, referência ou credenciais.
 
-Suíte final: **160 passed, 1 skipped** (teste GPU opt-in específico não acionado;
+Suíte final: **177 passed, 1 skipped** (teste GPU opt-in específico não acionado;
 o smoke real usa a GPU operacional). Integridade do perfil, léxico, corpus de
 pronúncia, golden regression e Compose passaram. Golden regression valida hashes,
 não audição. Smoke no endpoint ativo passou em health, readiness, métricas/fila,
@@ -253,8 +253,10 @@ um modelo inglês virou PT-BR só por receber transcrições.
 [Pipeline de arquivo único](../dataset-single-master.md): piloto rascunho de
 112 frases (~14 min estimados), expansão rascunho de 792 (~118 min), splits
 agrupados, cache/retomada, limites/custo, montagem de um WAV, manifestos, recorte
-monotônico, margens e quarentena. Trinta testes de dataset incluem perdas nos
-extremos e mudanças mascaradas por padding. A preparação neural tem 13 testes
+monotônico, margens e quarentena. São 47 testes do dataset: 30 do pipeline,
+incluindo perdas nos extremos e mudanças mascaradas por padding, e 17 de revisão
+em lote/bindings. Um comando gera evidências por ID após a aprovação explícita
+da amostragem, sem exigir centenas de edições manuais de JSON. A preparação neural tem 13 testes
 sintéticos adicionais. Nenhum deles demonstra qualidade vocal neural.
 
 Só existe a demonstração de tons de 22,8 s em
