@@ -1,0 +1,130 @@
+{
+  "schema": "aegis.voice_experiment_summary.v1",
+  "date_utc": "2026-11-01",
+  "dataset": {
+    "received": 1130,
+    "accepted_technical": 1130,
+    "rejected": 0,
+    "counts": {
+      "train": 900,
+      "validation": 180,
+      "test": 50
+    },
+    "groups": {
+      "train": 180,
+      "validation": 36,
+      "test": 10
+    },
+    "source_audio_seconds": 13001.473208333333,
+    "prepared_audio_seconds": 13001.498684807257,
+    "source_manifest_sha256": "c0cc5ac19fd833c5dc6bc416386aa2df9380296d38e4ec11d0046141c8269444",
+    "prepared_dataset_sha256": "935347d6bbe1db6058e22bee85ab53d4e89bbff9565d6fc998863a1daa6ee532",
+    "trainval_sha256": "c45908e96f98556aed66b3c72718f8414923ea2576394b017833c293398fd8f0",
+    "split_assignment_sha256": "65fa79ef3c4990b7ffa158142518179b67b3a2045fc8ff6adc1908758c199380",
+    "source_master_manifest_provenance": "unverified; originals absent",
+    "final_test_preserved": true
+  },
+  "training": {
+    "architecture": "Piper VITS / HiFi-GAN, pt-br",
+    "checkpoint_sha256": "abd3e6c7237aca5b7cf9c3cfc50945bfef44a83a594e00186f584d9d11fd355a",
+    "benchmark_source_commit": "12c89f226cf5e60ca69518d0d40fb5ac271b59ec",
+    "seed": 40733133,
+    "batch_size": 2,
+    "accumulation": 4,
+    "precision": "32-true",
+    "full_epoch_minibatches": 450,
+    "full_epoch_validation_minibatches": 90,
+    "pilot_planned_epochs": 10,
+    "pilot_status": "awaiting review of newly reported content/spectral findings and reconstruction",
+    "full_pilot_epochs_executed": 0,
+    "benchmark": {
+      "warmup_minibatches": 8,
+      "measured_minibatches": 32,
+      "timing": {
+        "count": 32,
+        "mean_seconds": 0.787968165721395,
+        "median_seconds": 0.7414097699802369,
+        "max_seconds": 0.9589474527165294,
+        "total_seconds": 25.21498130308464
+      },
+      "validation_seconds": 24.836352455895394,
+      "peak_allocated_mib": 2882.6767578125,
+      "peak_reserved_mib": 2992.0,
+      "projections": {
+        "10": {
+          "epochs": 10,
+          "seconds": 3794.2202703052317,
+          "hours": 1.0539500750847866
+        },
+        "30": {
+          "epochs": 30,
+          "seconds": 11382.660810915695,
+          "hours": 3.16185022525436
+        }
+      },
+      "maximum_observed_batch_scenarios": {
+        "10": {
+          "epochs": 10,
+          "seconds": 4563.627061783336,
+          "hours": 1.2676741838287044
+        },
+        "30": {
+          "epochs": 30,
+          "seconds": 13690.881185350008,
+          "hours": 3.8030225514861136
+        }
+      },
+      "checkpoint_io_included": false,
+      "first_full_epoch_observed": false,
+      "partial_epoch_eta_erratum": "Ignore eta_after_observed_epoch in original benchmark epoch metadata; projections uses 450 minibatches and is correct. Runner fixed for future runs."
+    }
+  },
+  "quality": {
+    "asr_device": "cuda",
+    "asr_compute_type": "float16",
+    "asr_language": "pt",
+    "asr_complete": true,
+    "asr_examples": 1130,
+    "asr_divergences": 263,
+    "asr_transcription_wall_seconds": 588.7128695701249,
+    "asr_weighted_word_divergence": 0.013727596160300731,
+    "asr_divergences_are_confirmed_dataset_defects": false,
+    "auditory_general_approval_recorded_privately": true,
+    "new_findings_decisions": "pending owner review",
+    "mandatory_review_ids": 366,
+    "suggested_sample_ids": 102,
+    "review_union_ids": 439,
+    "reconstruction_examples": 7,
+    "reconstruction_owner_approval": "pending",
+    "candidate_exported": false,
+    "candidate_voice_identity_latency_and_losses": "not measured; no pilot candidate exists"
+  },
+  "operation": {
+    "service": "aegis-tts",
+    "image": "aegis-tts-gateway:latency-1749f5f",
+    "image_sha256": "8aef74c67fe5238ce1e2b8781b9da3aedc73784014dd38bc1c1553f741fe93a0",
+    "windows": [
+      {
+        "stopped_utc": "2026-11-01T07:50:03Z",
+        "restored_smoke_utc": "2026-11-01T07:54:04Z",
+        "seconds_between_stop_confirmation_and_smoke": 241.0,
+        "synthesis_seconds": 1.8056704881601036,
+        "synthesis_sample_rate": 24000,
+        "synthesis_channels": 1
+      },
+      {
+        "stopped_utc": "2026-11-01T07:56:02Z",
+        "restored_smoke_utc": "2026-11-01T08:11:42Z",
+        "seconds_between_stop_confirmation_and_smoke": 940.0,
+        "synthesis_seconds": 1.7842171471565962,
+        "synthesis_sample_rate": 24000,
+        "synthesis_channels": 1
+      }
+    ],
+    "original_container_image_mounts_preserved": true,
+    "protected_files_hashes_unchanged": 81,
+    "production_status": "healthy; real 24000Hz mono PCM16 synthesis verified",
+    "candidate_promoted": false,
+    "private_artifacts_outside_git": true
+  }
+}

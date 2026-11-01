@@ -109,9 +109,9 @@ Hashes SHA-256 do experimento:
 
 ## Qualidade, autorização e reconstrução
 
-A declaração posterior do proprietário, “tudo aprovado.”, confirmou direitos,
-revisão auditiva geral e janela operacional. O registro privado identifica essa
-declaração e seu escopo, sem inventar provedor, voz, URL/data de termos ou lista
+A confirmação posterior do proprietário abrange direitos, revisão auditiva
+geral e janela operacional. O registro privado identifica a declaração e seu
+escopo, sem inventar provedor, voz, URL/data de termos ou lista
 de IDs ouvidos. O importador continua produzindo `content_review=pending`;
 a aprovação global fica em documento externo vinculado por hashes.
 
@@ -148,6 +148,20 @@ silêncio ou clipping. O risco de banda é sistemático e não comprova defeito
 perceptivo em cada clipe. A potência acima de Nyquist varia até 2,39%, com mediana
 de 0,69%. Isso precisa ser confrontado com a textura desejada.
 
+O ASR CUDA concluiu os 1.130 clipes, com 588,71 s de transcrição acumulada:
+867 correspondências após normalização e 263 divergências, 176 com apenas uma
+edição de palavra. Foram 409 edições em 29.794 palavras comparadas, divergência
+ponderada de 1,373%; não é uma taxa comprovada de erros do dataset. Nenhum
+segmento atingiu os limiares de baixa confiança usados pelo auditor.
+
+A fila final combina 366 IDs sinalizados (ASR, banda e outliers) e 102 amostras
+estratificadas, com sobreposição: 439 exemplos para revisão. A aprovação geral
+anterior foi preservada; as decisões sobre esses achados e a reconstrução nova
+continuam pendentes. O proprietário solicitou um ZIP integrado para revisão,
+que reúne originais, conversões, pares neurais, transcrições, diferenças e hashes
+em caminhos relativos compatíveis com Windows. Esse pacote não é um modelo
+treinado. Nenhum texto foi alterado para coincidir com o ASR.
+
 A base continua sendo Piper VITS/HiFi-GAN Cadu medium PT-BR; não houve troca de
 arquitetura. O [card oficial](https://huggingface.co/rhasspy/piper-voices/blob/b4e358ffcb232591bf73a540e70f7de528e4174a/pt/pt_BR/cadu/medium/MODEL_CARD)
 e a configuração confirmam 22.050 Hz, um locutor e frontend `pt-br`.
@@ -179,6 +193,12 @@ IDs. Verifica cada sequência fonética do cache contra o frontend aprovado.
 Os 1.080 textos de treino/validação passaram pela cobertura `pt-br`, sem símbolos
 desconhecidos. Isso não equivale a aprovação de pronúncia de números ou nomes.
 
+A primeira tentativa CUDA foi interrompida antes dos minibatches por corrupção
+do estado nativo do eSpeak na reinicialização pelo trainer. A produção foi
+restaurada e a correção passou pelo lifecycle completo em CPU. O frontend agora
+produz os IDs em processo separado; o trainer compara todas as sequências contra
+esse resultado vinculado por hash, sem reinicializar eSpeak durante `setup`.
+
 A acumulação foi corrigida: o Piper usa otimização manual de G/D, incompatível
 com `Trainer(accumulate_grad_batches=4)`. O runner acumula explicitamente os
 gradientes dos dois otimizadores, separa seus parâmetros, trata o grupo parcial
@@ -202,13 +222,37 @@ mede forward/backward/updates, média/mediana/máximo, validação inteira e pic
 VRAM. Projeta 10/30 épocas e atualiza a projeção após a primeira época completa.
 Não guarda pesos ajustados do benchmark nem promove candidata.
 
+Benchmark real de 01/11/2026, batch 2/acumulação 4/FP32:
+
+| Medida | Resultado |
+| --- | ---: |
+| Minibatches medidos, depois do warm-up | 32 |
+| Tempo médio / mediano / máximo | 0,788 / 0,741 / 0,959 s |
+| Validação completa, 90 batches | 24,836 s |
+| Pico VRAM alocada / reservada | 2.882,68 / 2.992 MiB |
+| Projeção de 10 épocas, média / máximo observado | 63,24 / 76,06 min |
+| Projeção de 30 épocas, média / máximo observado | 3,16 / 3,80 h |
+
+O máximo observado é um cenário conservador, não um limite estatístico de tempo.
+Essas projeções ainda excluem escrita/hash de checkpoints e parte do overhead
+de I/O. Planejar aproximadamente 70–85 minutos para o primeiro piloto de dez
+épocas, revendo o orçamento após uma época completa. Não houve OOM, NaN ou Inf
+no benchmark. Seus pesos ajustados foram descartados.
+
+O JSON privado original do benchmark contém um campo legado de ETA por época
+calculado sobre a época parcial de 40 batches. Esse campo não é válido para o
+treino completo e não foi usado nos números acima. O runner foi corrigido para
+emitir a atualização por época somente após todos os 450 batches; o artefato
+original foi preservado para auditoria. `projections` no benchmark usa a fórmula
+correta com 450 batches e a validação medida.
+
 ```bash
 python3 -m training.train_piper \
   --prepared /PRIVADO/prepared/collection-v3-balanced \
   --checkpoint /PRIVADO/models/pt_BR-cadu-medium.ckpt \
-  --frontend-report /PRIVADO/audit/frontend-v3.json \
+  --frontend-report /PRIVADO/audit/frontend-v4.json \
   --review /PRIVADO/audit/benchmark-review-v3.json \
-  --output /PRIVADO/experiments/benchmark-fp32-v2 \
+  --output /PRIVADO/experiments/benchmark-fp32-v3 \
   --benchmark --execute \
   --owner-authorization REFERENCIA_REAL \
   --exclusive-gpu-window JANELA_REAL
@@ -220,6 +264,17 @@ losses G/D/validação; JSONL registra tempos, recursos e falhas. NaN/Inf aborta
 divergência finita é sinalizada. São retidos os dois melhores checkpoints por
 `val_mel` e o último, com índice SHA-256. `--resume` exige checkpoint do mesmo
 experimento e identidade de dados/configuração/revisão preservada.
+
+`training.evaluate_piper` prepara a etapa posterior: exportação ONNX somente de
+checkpoint indexado de um piloto real, seis frases inéditas de inferência,
+referências A/B opcionais de treino/validação e comparação funcional explícita
+com a produção. Mede chegada do primeiro PCM, atividade por limiar, silêncio
+inicial, playback estimado, tempo completo, RTF e recursos, distinguindo essas
+medidas de aprovação perceptiva. O modo padrão só imprime o plano.
+O adaptador desativa a normalização automática do Piper e verifica clipping
+antes e depois do resampling. Nenhuma candidata foi exportada ou avaliada:
+o piloto ainda depende da revisão dos achados novos. Não há curvas de loss de
+piloto nem resultado de identidade/pronúncia/latência da candidata a reportar.
 
 ## Operação e rollback
 
@@ -238,6 +293,14 @@ A operação retém esse mesmo container e o reinicia ao encerrar a janela, incl
 quando o processo experimental falha. Não usa `compose down -v` nem recria volumes.
 A retomada verifica readiness e síntese WAV real mono/PCM16/24.000 Hz.
 
+Foram duas janelas: 07:50:03–07:54:04 UTC (primeira tentativa interrompida pelo
+frontend) e 07:56:02–08:11:42 UTC (benchmark válido e ASR), medindo desde a
+confirmação de parada até o smoke de síntese concluído. Ao final, o mesmo
+container/imagem/mounts estava saudável; os 81 hashes protegidos coincidiam.
+A última síntese real retornou 57.840 frames, 24.000 Hz mono/PCM16, em 1,784 s.
+Esse é o tempo total dessa requisição de smoke da produção, não a latência até
+a primeira fala útil nem uma medição da futura candidata.
+
 Não há integração automática da candidata nos endpoints. Continuam preservados
 `/v1/audio/speech`, `/v1/aegis/speech`, streaming, cancelamento, readiness e fila.
 O adaptador candidato converte a taxa interna na borda e só poderá ser ligado
@@ -249,3 +312,17 @@ sob `/home/phc/aegis-private/aegisvoice-v2/`, fora do Git. O diretório é priva
 e persistente. ZIPs e checkpoints também foram acrescentados aos ignores.
 As remoções locais pré-existentes de `dataset/` não fazem parte desta mudança;
 o teste legado que lê `dataset/corpus.pt-BR.jsonl` depende desse arquivo ausente.
+
+## Verificação de software
+
+Verificação final: 277 testes passaram no host, com dois testes de autograd
+ignorados por ausência de Torch nesse Python e dois deselected (GPU opt-in e
+fixture de corpus ausente no working tree). Os testes de Torch/autograd foram
+executados no venv isolado; a suíte de operações passou com 29 testes. O teste
+legado de corpus também passou usando a fixture exata de HEAD em diretório
+temporário, sem restaurar as remoções locais nem gerar corpus novo.
+`git diff --check`, leitura integral do data loader, alinhador CPU, frontend
+isolado, benchmark CUDA e readiness/síntese real foram verificados.
+
+O resumo agregado legível por máquina está em
+[`v2.0/experiment-20261101.json`](v2.0/experiment-20261101.json).
