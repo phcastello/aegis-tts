@@ -51,6 +51,7 @@ VOICE_PROFILE = "AegisVoicev1.0-Q00-W04-P07-M02"
 NATIVE_PROFILE = "AegisVoicev1.0"
 INITIAL_SEGMENT = os.environ.get("AEGIS_TTS_INITIAL_SEGMENT", "stable")
 PROFILE_LATENCY = os.environ.get("AEGIS_TTS_PROFILE_LATENCY") == "1"
+PROFILE_LATENCY_FLAG = Path("/tmp/aegis-tts-profile-latency")
 SOURCE_COMMIT = os.environ.get("AEGIS_TTS_SOURCE_COMMIT", "unknown")
 CODEC_BATCH_FRAMES = int(os.environ.get("AEGIS_TTS_CODEC_BATCH_FRAMES", "25"))
 INITIAL_CODEC_FRAMES = int(os.environ.get("AEGIS_TTS_INITIAL_CODEC_FRAMES", "1"))
@@ -61,6 +62,13 @@ if ONSET_TRIM not in {"off", "conservative-v1"}:
     raise ValueError("unsupported synthesized output onset variant")
 RUNTIME_VARIANT = f"{INITIAL_SEGMENT}-codec{INITIAL_CODEC_FRAMES}x{CODEC_BATCH_FRAMES}-onset-{ONSET_TRIM}"
 REQUEST_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
+
+
+def _profile_latency_enabled() -> bool:
+    # Private, ephemeral operator switch: benchmark a running deployment and
+    # turn detailed events off without reloading the GPU model. No HTTP route
+    # can create this file; normal production remains off.
+    return PROFILE_LATENCY or PROFILE_LATENCY_FLAG.is_file()
 
 Q00_PARAMS: dict[str, Any] = {
     "temperature": 0.05,
@@ -610,7 +618,7 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
         values["aegis_tts_dsp_seconds"] += dsp_seconds
         values["aegis_tts_generation_seconds"] += perf_counter() - started
         values["aegis_tts_first_dsp_input_audio_seconds"] = metrics.first_render_received_samples / SAMPLE_RATE
-        if PROFILE_LATENCY:
+        if _profile_latency_enabled():
             # A single bounded aggregate event, correlated to the existing
             # request ID. No text, voice reference, credential or raw PCM.
             runtime = app.state.service.runtimes.get(segment.request_id)
@@ -764,7 +772,7 @@ async def _submit_native(payload: dict[str, Any]) -> Runtime:
     segments = [SpeechSegment(speech.request_id, item.segment_index, item.original_text, item.normalized_text, SegmentStatus.QUEUED, max(1.0, len(item.normalized_text) / 80), original_span=item.original_span, normalized_span=item.normalized_span, split_reason=item.split_reason) for item in drafts]
     try:
         runtime = await app.state.service.submit(speech, segments)
-        if PROFILE_LATENCY:
+        if _profile_latency_enabled():
             app.state.service.event(runtime, "preparation_profiled", validation_ms=validation_ms,
                 normalization_ms=normalization_seconds * 1000, segmentation_ms=segmentation_seconds * 1000)
         return runtime
