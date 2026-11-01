@@ -19,8 +19,10 @@ PROFILE = 'AegisVoicev2.0-PiperPTBR-pilot'
 
 
 class PiperUnitAdapter:
-    def __init__(self, voice, *, max_characters: int = 1200, max_audio_seconds: float = 30):
+    def __init__(self, voice, *, max_characters: int = 1200, max_audio_seconds: float = 30,
+                 syn_config=None):
         self.voice = voice
+        self.synthesis_config = syn_config
         self.max_characters = max_characters
         self.max_audio_seconds = max_audio_seconds
         self._lock = threading.Lock()
@@ -33,7 +35,7 @@ class PiperUnitAdapter:
         import json
         import onnxruntime as ort
         from piper import PiperVoice
-        from piper.config import PiperConfig
+        from piper.config import PiperConfig, SynthesisConfig
         parameters = json.loads(config.read_text())
         if parameters.get('espeak', {}).get('voice') != 'pt-br':
             raise ValueError('a verified pt-br frontend is required')
@@ -42,7 +44,9 @@ class PiperUnitAdapter:
         options.inter_op_num_threads = 1
         session = ort.InferenceSession(str(model), sess_options=options, providers=['CPUExecutionProvider'])
         voice = PiperVoice(session=session, config=PiperConfig.from_dict(parameters))
-        return cls(voice)
+        # Piper defaults to per-sentence peak normalization. Preserve decoder
+        # levels so private evaluation measures the candidate without auto gain.
+        return cls(voice, syn_config=SynthesisConfig(normalize_audio=False))
 
     async def __call__(self, segment, cancelled: asyncio.Event):
         """SpeechService AudioAdapter signature; HTTP/SSE remain owned by it."""
@@ -75,12 +79,18 @@ class PiperUnitAdapter:
                 return
         try:
             emitted_samples = 0
-            for chunk in self.voice.synthesize(text):
+            chunks = (self.voice.synthesize(text, syn_config=self.synthesis_config)
+                      if self.synthesis_config is not None else self.voice.synthesize(text))
+            for chunk in chunks:
                 if cancelled():
                     return
                 if chunk.sample_channels != 1:
                     raise ValueError('candidate generated non-mono audio')
                 values = np.asarray(chunk.audio_float_array, dtype=np.float64).reshape(-1)
+                # A clipped source sample can fall below full scale after
+                # resampling; retain that evidence before interpolation.
+                if not np.isfinite(values).all() or np.max(np.abs(values), initial=0) >= 1:
+                    raise ValueError('non-finite/clipped audio from candidate before resampling')
                 values = resample_pcm(values, chunk.sample_rate, 24000)
                 emitted_samples += len(values)
                 if emitted_samples > self.max_audio_seconds * 24000:

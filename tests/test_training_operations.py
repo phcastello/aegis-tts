@@ -30,6 +30,28 @@ def test_cuda_measurements_summary_is_mean_median_max_not_hour_count():
             runner.timing_summary(invalid)
 
 
+@pytest.mark.parametrize('observed,complete', [(40, False), (450, True)])
+def test_partial_benchmark_epoch_never_claims_full_epoch_eta(tmp_path, monkeypatch, observed, complete):
+    fake_torch = SimpleNamespace(cuda=SimpleNamespace(synchronize=lambda: None,
+        max_memory_allocated=lambda: 1024, max_memory_reserved=lambda: 2048))
+    callback = runner.telemetry_callback(fake_torch, object, tmp_path,
+        {'train_minibatches_per_epoch': 450})
+    callback.epoch_start = 100.
+    callback.epoch_times = [.1] * observed
+    callback.validation_seconds = 25.
+    monkeypatch.setattr(runner.time, 'perf_counter', lambda: 200.)
+    callback.on_train_epoch_end(SimpleNamespace(current_epoch=0), None)
+    record = callback.epochs[0]
+    assert record['complete_training_epoch'] is complete
+    assert record['observed_train_minibatches'] == observed
+    assert record['expected_train_minibatches'] == 450
+    if complete:
+        assert record['eta_after_observed_epoch']['10']['remaining_seconds'] == 900.
+    else:
+        assert 'eta_after_observed_epoch' not in record
+        assert 'partial training epoch' in record['eta_note']
+
+
 def test_accumulation_includes_final_partial_group_without_underweighting():
     assert [runner.accumulation_group_size(i, 10, 4) for i in range(10)] == [4]*8 + [2]*2
     with pytest.raises(ValueError):

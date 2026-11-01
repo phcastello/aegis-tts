@@ -340,9 +340,15 @@ def telemetry_callback(torch, callback_base, output, counts, warmup=0):
                       'peak_allocated_mib': torch.cuda.max_memory_allocated() / 2**20,
                       'peak_reserved_mib': torch.cuda.max_memory_reserved() / 2**20,
                       'host_max_rss_mib': __import__('resource').getrusage(__import__('resource').RUSAGE_SELF).ru_maxrss / 1024}
-            record['eta_after_observed_epoch'] = {
-                str(n): {'remaining_seconds': max(0, n - trainer.current_epoch - 1) * record['wall_seconds_including_validation_io']}
-                for n in (10, 30)}
+            record['observed_train_minibatches'] = len(self.epoch_times)
+            record['expected_train_minibatches'] = counts['train_minibatches_per_epoch']
+            record['complete_training_epoch'] = len(self.epoch_times) == counts['train_minibatches_per_epoch']
+            if record['complete_training_epoch']:
+                record['eta_after_observed_epoch'] = {
+                    str(n): {'remaining_seconds': max(0, n - trainer.current_epoch - 1) * record['wall_seconds_including_validation_io']}
+                    for n in (10, 30)}
+            else:
+                record['eta_note'] = 'partial training epoch; use measured-minibatch benchmark projections, not this partial wall time'
             self.epochs.append(record)
             self.emit(record)
             (output / 'epoch-summary.json').write_text(json.dumps(self.epochs, indent=2))
