@@ -56,11 +56,14 @@ SOURCE_COMMIT = os.environ.get("AEGIS_TTS_SOURCE_COMMIT", "unknown")
 CODEC_BATCH_FRAMES = int(os.environ.get("AEGIS_TTS_CODEC_BATCH_FRAMES", "25"))
 INITIAL_CODEC_FRAMES = int(os.environ.get("AEGIS_TTS_INITIAL_CODEC_FRAMES", "1"))
 ONSET_TRIM = os.environ.get("AEGIS_TTS_ONSET_TRIM", "off")
+STREAM_STARTUP_MS = float(os.environ.get("AEGIS_TTS_STREAM_STARTUP_MS", "0"))
 if CODEC_BATCH_FRAMES not in {16, 22, 25} or not 1 <= INITIAL_CODEC_FRAMES <= CODEC_BATCH_FRAMES:
     raise ValueError("initial codec frames must be between 1 and the configured codec batch size")
 if ONSET_TRIM not in {"off", "conservative-v1"}:
     raise ValueError("unsupported synthesized output onset variant")
-RUNTIME_VARIANT = f"{INITIAL_SEGMENT}-codec{INITIAL_CODEC_FRAMES}x{CODEC_BATCH_FRAMES}-onset-{ONSET_TRIM}"
+if not 0 <= STREAM_STARTUP_MS <= 500:
+    raise ValueError("stream startup reserve must be finite and between 0 and 500 ms")
+RUNTIME_VARIANT = f"{INITIAL_SEGMENT}-codec{INITIAL_CODEC_FRAMES}x{CODEC_BATCH_FRAMES}-onset-{ONSET_TRIM}-startup{STREAM_STARTUP_MS:g}ms"
 REQUEST_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -78,8 +81,9 @@ Q00_PARAMS: dict[str, Any] = {
     "seed": 40733133,
     "min_tokens": 0,
     "max_tokens": 1024,
-    # This preserves the exact Q00 prompt construction in vLLM-Omni.  It is
-    # independent of the HTTP ``stream`` flag and does not disable streaming.
+    # Retained for payload continuity. Installed Omni 0.22 discards this
+    # top-level field; Base effectively uses false. Q00 sampling is enforced
+    # by the deploy YAML. Do not silently change effective conditioning here.
     "non_streaming_mode": True,
 }
 
@@ -126,6 +130,7 @@ class GatewayMetrics:
             "aegis_tts_first_raw_voice_seconds": 0,
             "aegis_tts_first_output_pcm_seconds": 0,
             "aegis_tts_onset_removed_seconds_total": 0,
+            "aegis_tts_stream_startup_buffer_seconds": STREAM_STARTUP_MS / 1000,
         }
 
     def render(self) -> str:
@@ -199,7 +204,9 @@ async def lifespan(app: FastAPI):
     lexicon = PronunciationLexicon(LEXICON_PATH)
     app.state.normalizer = SpeechTextNormalizer(lexicon.apply)
     app.state.segmenter = SpeechSegmenter()
-    app.state.service = SpeechService(_segment_adapter, allow_replace_all=os.environ.get("AEGIS_ALLOW_REPLACE_ALL") == "1")
+    app.state.service = SpeechService(_segment_adapter,
+        allow_replace_all=os.environ.get("AEGIS_ALLOW_REPLACE_ALL") == "1",
+        stream_startup_seconds=STREAM_STARTUP_MS / 1000)
     await app.state.service.start()
     app.state.warmed = False
     app.state.warm_lock = asyncio.Lock()

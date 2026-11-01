@@ -85,6 +85,46 @@ def main() -> int:
         time.sleep(0.2)
     require(state["status"] == "cancelled", f"cancelamento não concluiu: {state['status']}")
     print("ok cancelamento explícito")
+
+    # Exercise the real scheduler while bounded requests are active/queued;
+    # all generated material is synthetic and both requests are cancelled.
+    opened = []
+    identifiers = []
+    try:
+        for priority in (60, 20):
+            response = request(base_url, "/v1/aegis/speech", method="POST", payload={
+                "text": "Esta unidade valida a fila e o cancelamento. " * 15,
+                "priority": priority, "stream": True, "response_format": "pcm"})
+            opened.append(response)
+            identifiers.append(response.headers["X-Aegis-Request-Id"])
+        with request(base_url, "/v1/aegis/queue") as response:
+            queue = json.loads(response.read())
+        require(queue['queued_requests'] >= 1, 'fila não reteve a segunda requisição')
+        require(queue['limits'] == {'max_requests': 32, 'max_segments': 128,
+                                     'max_total_characters': 50000}, 'limites de fila alterados')
+        try:
+            with request(base_url, "/v1/aegis/speech", method="POST", payload={
+                "text": "Teste de rejeição.", "interrupt_policy": "reject_if_busy"}):
+                raise RuntimeError('reject_if_busy aceitou uma requisição com fila ocupada')
+        except HTTPError as error:
+            require(error.code == 409, f'reject_if_busy: HTTP {error.code}')
+    finally:
+        for identifier in reversed(identifiers):
+            with request(base_url, f"/v1/aegis/speech/{identifier}", method="DELETE") as response:
+                response.read()
+        for response in opened:
+            response.close()
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        states = []
+        for identifier in identifiers:
+            with request(base_url, f"/v1/aegis/speech/{identifier}") as response:
+                states.append(json.loads(response.read())['status'])
+        if all(state == 'cancelled' for state in states):
+            break
+        time.sleep(.2)
+    require(all(state == 'cancelled' for state in states), 'requisições do smoke não cancelaram')
+    print('ok fila limitada + reject_if_busy + cancelamento ativo/enfileirado')
     return 0
 
 

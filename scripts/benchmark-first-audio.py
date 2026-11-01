@@ -33,6 +33,8 @@ CORPUS = {
     'negation': 'Não. Primeiro confirme o endereço; depois eu continuo.',
     'numbers': 'A reunião ficou para vinte e três de novembro, às dezesseis horas e quarenta minutos.',
     'consonants': 'Chaves, filtros e três sensores passaram pela verificação.',
+    'reserved_short': 'Fique por aqui; verifico os três resultados antes de confirmar.',
+    'reserved_long': 'Para sexta-feira, reserve quinze centímetros de margem e confira o nome de cada arquivo, porque a última revisão precisa corresponder exatamente ao relatório aprovado.',
     'long': 'A água ferve a cem graus Celsius ao nível do mar. Em lugares mais altos, ela ferve a uma temperatura menor, por causa da pressão atmosférica.',
 }
 
@@ -178,7 +180,8 @@ def capture(directory: Path, cases: list[str], repetitions: int,
         raise RuntimeError('one or more captures failed; all observations retained')
 
 
-def benchmark(directory: Path, url: str, cases: list[str], repetitions: int) -> None:
+def benchmark(directory: Path, url: str, cases: list[str], repetitions: int,
+              wait_idle_seconds: float = 0) -> None:
     rows = []
     with httpx.Client(base_url=url.rstrip('/'), timeout=120) as client:
         for name, case, repetition in samples(cases, repetitions):
@@ -189,6 +192,16 @@ def benchmark(directory: Path, url: str, cases: list[str], repetitions: int) -> 
                 queue = client.get('/v1/aegis/queue')
                 queue.raise_for_status()
                 row['queue_before'] = queue.json()
+                if wait_idle_seconds:
+                    waiting = time.perf_counter()
+                    while row['queue_before']['active_request_id'] or row['queue_before']['queued_requests']:
+                        if time.perf_counter() - waiting >= wait_idle_seconds:
+                            raise TimeoutError('idle condition not reached; no synthesis sent')
+                        time.sleep(.1)
+                        queue = client.get('/v1/aegis/queue')
+                        queue.raise_for_status()
+                        row['queue_before'] = queue.json()
+                    row['idle_gate_wait_ms'] = (time.perf_counter() - waiting) * 1000
                 raw, timings = receive(client, '/v1/aegis/speech', {
                     'request_id': identifier, 'text': CORPUS[case], 'stream': True,
                     'response_format': 'pcm', 'priority': 50, 'interrupt_policy': 'enqueue'}, identifier)
@@ -197,7 +210,7 @@ def benchmark(directory: Path, url: str, cases: list[str], repetitions: int) -> 
                 events = client.get(f'/v1/aegis/speech/{identifier}/events')
                 events.raise_for_status()
                 row['events'] = [json.loads(line[6:]) for line in events.text.splitlines() if line.startswith('data: ')]
-            except (httpx.HTTPError, ValueError) as error:
+            except (httpx.HTTPError, ValueError, TimeoutError) as error:
                 row['error'] = type(error).__name__
                 row['failed_after_ms'] = (time.perf_counter() - observed) * 1000
             rows.append(row)
@@ -333,6 +346,8 @@ def main() -> None:
     parser.add_argument('--capture', action='store_true')
     parser.add_argument('--replay', action='store_true')
     parser.add_argument('--benchmark-url', help='measure native production API; does not capture model raw PCM')
+    parser.add_argument('--wait-idle-seconds', type=float, default=0,
+                        help='optional read-only queue gate before each request; wait is recorded outside request latency')
     parser.add_argument('--baseline-pipeline', type=Path, help='original deployed voice_pipeline.py for byte equality')
     parser.add_argument('--initial-codec-chunk-frames', type=int,
                         help='experimental capture-only override; verify installed API support and review acoustic differences')
@@ -343,12 +358,14 @@ def main() -> None:
         parser.error('select --capture, --replay and/or --benchmark-url')
     if args.initial_codec_chunk_frames is not None and (not args.capture or args.initial_codec_chunk_frames < 1):
         parser.error('--initial-codec-chunk-frames requires --capture and a positive value')
+    if not 0 <= args.wait_idle_seconds <= 60:
+        parser.error('--wait-idle-seconds must be between 0 and 60')
     os.umask(0o077)
     try:
         directory = private_directory(args.output_dir)
         cases = args.cases or list(CORPUS)
         if args.benchmark_url:
-            benchmark(directory, args.benchmark_url, cases, args.repetitions)
+            benchmark(directory, args.benchmark_url, cases, args.repetitions, args.wait_idle_seconds)
         if args.capture:
             capture(directory, cases, args.repetitions, args.initial_codec_chunk_frames)
         if args.replay:
