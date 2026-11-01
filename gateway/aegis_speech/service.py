@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 import itertools
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -36,6 +37,7 @@ class Runtime:
     sequence: int = 0
     created_monotonic: float = field(default_factory=monotonic)
     queued_monotonic: float = field(default_factory=monotonic)
+    stream_startup_holding: bool = False
 
 
 class QueueFullError(RuntimeError): pass
@@ -62,8 +64,15 @@ class InterruptionPlanner:
 
 class SpeechService:
     """A single-worker, bounded scheduler. Aging bonus is floor(wait/interval), capped."""
-    def __init__(self, adapter: AudioAdapter, *, max_requests: int = 32, max_segments: int = 128, max_characters: int = 50000, aging_interval: int = 30, aging_max_bonus: int = 10, max_buffered_seconds: float = 4.0, sample_rate: int = 24000, allow_replace_all: bool = False) -> None:
+    def __init__(self, adapter: AudioAdapter, *, max_requests: int = 32, max_segments: int = 128, max_characters: int = 50000, aging_interval: int = 30, aging_max_bonus: int = 10, max_buffered_seconds: float = 4.0, sample_rate: int = 24000, allow_replace_all: bool = False, stream_startup_seconds: float = 0.0) -> None:
+        try:
+            startup_seconds = float(stream_startup_seconds)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("stream startup delay must be finite and between zero and 0.5 seconds") from exc
+        if not math.isfinite(startup_seconds) or not 0 <= startup_seconds <= .5:
+            raise ValueError("stream startup delay must be finite and between zero and 0.5 seconds")
         self.adapter = adapter
+        self.stream_startup_seconds = startup_seconds
         self.max_requests, self.max_segments, self.max_characters = max_requests, max_segments, max_characters
         self.aging_interval, self.aging_max_bonus = aging_interval, aging_max_bonus
         self.max_buffered_bytes = int(max_buffered_seconds * sample_rate * 2)
@@ -131,6 +140,14 @@ class SpeechService:
     async def cancel(self, request_id: str, reason: str = "client_request") -> Runtime | None:
         runtime = self.runtimes.get(request_id)
         if not runtime or runtime.request.status in FINAL_REQUEST_STATUSES:
+            if runtime and runtime.stream_startup_holding and not runtime.cancel.is_set():
+                # Synthesis can finish while its first PCM is held. Preserve
+                # that historical completion status, but DELETE must still
+                # discard audio that has never reached the client.
+                runtime.cancel.set()
+                runtime.request.cancel_reason = reason
+                self.event(runtime, "stream_startup_cancelled", reason=reason)
+                await self._close_audio(runtime, discard=True)
             return runtime
         if runtime.request.status != RequestStatus.CANCELLING:
             runtime.request.transition(RequestStatus.CANCELLING)
@@ -249,16 +266,44 @@ class SpeechService:
                 self.event(runtime, "failed", error_code=request.error_code)
                 runtime.done.set(); await self._close_audio(runtime, discard=True)
 
+    async def _wait_stream_startup(self, runtime: Runtime) -> bool:
+        runtime.stream_startup_holding = True
+        started = monotonic()
+        self.event(runtime, "stream_startup_buffering", configured_ms=self.stream_startup_seconds * 1000)
+        try:
+            await asyncio.wait_for(runtime.cancel.wait(), timeout=self.stream_startup_seconds)
+        except asyncio.TimeoutError:
+            pass
+        if runtime.cancel.is_set():
+            return False
+        runtime.stream_startup_holding = False
+        self.event(runtime, "stream_startup_released", configured_ms=self.stream_startup_seconds * 1000,
+                   waited_ms=(monotonic() - started) * 1000)
+        return True
+
     async def audio_stream(self, runtime: Runtime) -> AsyncIterator[bytes]:
+        first = True
         try:
             while True:
                 chunk = await runtime.audio.get()
                 if chunk is None: break
+                if first and runtime.request.stream and self.stream_startup_seconds:
+                    # Keep the one dequeued block in buffered_bytes during
+                    # this explicit startup delay. The producer keeps using
+                    # the existing bounded queue and four-second audio cap;
+                    # there is no second growing prebuffer or waveform edit.
+                    if not await self._wait_stream_startup(runtime):
+                        return
+                first = False
+                if runtime.cancel.is_set():
+                    return
                 runtime.buffered_bytes = max(0, runtime.buffered_bytes - len(chunk))
                 yield chunk
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, GeneratorExit):
             await self.cancel(runtime.request.request_id, "client_disconnected")
             raise
+        finally:
+            runtime.stream_startup_holding = False
 
     @staticmethod
     def _trailing_silence_samples(pcm: bytes, threshold: int = 100) -> int:
