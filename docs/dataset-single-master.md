@@ -1,5 +1,10 @@
 # Dataset PT-BR: uma operação no Melodyne
 
+> Fluxo legado e registro histórico, anterior à coleção real do proprietário.
+> A importação da coleção Windows e o estado atual do experimento estão em
+> [AegisVoice v2: coleção real](audio-collection-v1.md). Não gerar outro corpus
+> nem reaplicar os efeitos aos clipes já tratados.
+
 Estado em 01/11/2026: o pipeline e os testes sintéticos estão preparados.
 **Nenhuma geração de voz, compra, download de checkpoint, ajuste ou treino foi executado.**
 A produção TTS não usa este pipeline. A referência pessoal protegida não foi

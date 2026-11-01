@@ -1,5 +1,9 @@
 # Nova voz: preparação sem treino nem substituição da produção
 
+> Registro histórico da preparação inicial. O dataset real, as autorizações
+> posteriores e as medições do experimento estão em
+> [AegisVoice v2: coleção real](audio-collection-v1.md).
+
 Estado em 01/11/2026: **scripts preparados; nenhum checkpoint/ONNX baixado,
 nenhum fine-tuning, reconstrução neural ou deploy da nova voz executado**.
 A instrução posterior do proprietário exige autorização explícita antes dessas

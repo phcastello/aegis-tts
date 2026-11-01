@@ -18,3 +18,8 @@ giselle_AegisVoice*.txt
 *.flac
 *.mp3
 *.ogg
+*.zip
+*.ckpt
+*.onnx
+*.safetensors
+dataset_final

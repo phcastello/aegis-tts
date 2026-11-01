@@ -32,6 +32,11 @@ reports/
 *.flac
 *.mp3
 *.ogg
+*.zip
+*.ckpt
+*.onnx
+*.safetensors
+dataset_final/
 
 # The protected voice bundle is a versioned deployment input, including audio
 # and reference transcripts.
