@@ -51,7 +51,9 @@ def test_receive_handles_pcm_samples_split_between_chunks(monkeypatch):
     assert row['first_pcm_ms'] == pytest.approx(10)
     assert row['first_nonsilent_ms'] == pytest.approx(30)
     assert row['leading_nonsilent_audio_ms'] == pytest.approx(1 / 24)
-    assert row['estimated_first_audible_playback_ms'] == pytest.approx(10 + 1 / 24)
+    # The voiced sample is incomplete until the third arrival at 30ms.
+    assert row['estimated_first_audible_playback_ms'] == pytest.approx(30)
+    assert row['first_voice_available_ms'] == pytest.approx(30)
     assert [piece['bytes'] for piece in row['chunks']] == [1, 2, 1]
 
 
@@ -86,3 +88,15 @@ def test_audible_estimate_does_not_claim_silent_audio_is_audible():
     row = benchmark.audible_estimate(b'\x00\x00' * 240 + b'\x00\x80', 50)
     assert row['leading_nonsilent_audio_ms'] == 10
     assert row['estimated_first_audible_playback_ms'] == 60
+
+
+def test_audible_estimate_respects_late_voiced_batch_and_underrun():
+    # 80ms of silent PCM at 300ms, followed by 420ms of silence then speech
+    # in the 1400ms batch. A naive 300+500=800ms is physically impossible.
+    pcm = b'\0\0' * 12000 + b'\x65\x00' * 2400
+    chunks = [{'ms': 300, 'bytes': 3840}, {'ms': 1400, 'bytes': len(pcm) - 3840}]
+    row = benchmark.audible_estimate(pcm, 300, chunks)
+    assert row['first_voice_available_ms'] == 1400
+    assert row['estimated_first_audible_playback_ms'] == 1820
+    assert row['immediate_playback_underruns'] == 1
+    assert row['immediate_playback_underrun_ms'] == 1020

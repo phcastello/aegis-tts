@@ -30,6 +30,9 @@ from voice_pipeline import AcousticStreamProcessor, Pcm16Reassembler
 CORPUS = {
     'time': 'São nove horas e quinze minutos.',
     'math': 'Dezessete mais vinte e cinco são quarenta e dois.',
+    'negation': 'Não. Primeiro confirme o endereço; depois eu continuo.',
+    'numbers': 'A reunião ficou para vinte e três de novembro, às dezesseis horas e quarenta minutos.',
+    'consonants': 'Chaves, filtros e três sensores passaram pela verificação.',
     'long': 'A água ferve a cem graus Celsius ao nível do mar. Em lugares mais altos, ela ferve a uma temperatura menor, por causa da pressão atmosférica.',
 }
 
@@ -72,14 +75,41 @@ def request_id() -> str:
     return ''.join(alphabet[(value >> shift) & 31] for shift in range(125, -1, -5))
 
 
-def audible_estimate(pcm: bytes, first_pcm_ms: float | None) -> dict:
+def audible_estimate(pcm: bytes, first_pcm_ms: float | None, chunks: list[dict] | None = None) -> dict:
     values = np.frombuffer(pcm, dtype='<i2').astype(np.int32)
     above_threshold = np.abs(values) > 100
     leading = int(np.argmax(above_threshold)) / 24 if np.any(above_threshold) else None
+    playback = first_pcm_ms + leading if first_pcm_ms is not None and leading is not None else None
+    available, underruns, underrun_ms, end_ms, received = None, 0, 0.0, None, 0
+    if chunks is not None:
+        # Simulate immediate playback of each complete sample, respecting its
+        # actual arrival. first_pcm + audio_offset alone is wrong when a tiny
+        # silent codec chunk is followed by a late batch and an underrun.
+        playback = None
+        voice_sample = int(np.argmax(above_threshold)) if np.any(above_threshold) else None
+        for chunk in chunks:
+            before = received // 2
+            received += chunk['bytes']
+            after = received // 2
+            if after == before:
+                continue
+            arrival = chunk['ms']
+            if end_ms is not None and arrival - end_ms > 10:
+                underruns += 1
+                underrun_ms += arrival - end_ms
+            start = max(arrival, end_ms) if end_ms is not None else arrival
+            if voice_sample is not None and available is None and before <= voice_sample < after:
+                available = arrival
+                playback = start + (voice_sample - before) / 24
+            end_ms = start + (after - before) / 24
+        if received != len(pcm):
+            raise ValueError('playback transport schedule does not consume PCM')
     return {'leading_nonsilent_audio_ms': leading,
-            'estimated_first_audible_playback_ms': first_pcm_ms + leading
-                if first_pcm_ms is not None and leading is not None else None,
-            'audible_playback_estimate_assumption': 'immediate uninterrupted playback; excludes client and speaker delay'}
+            'first_voice_available_ms': available,
+            'estimated_first_audible_playback_ms': playback,
+            'immediate_playback_underruns': underruns if chunks is not None else None,
+            'immediate_playback_underrun_ms': underrun_ms if chunks is not None else None,
+            'audible_playback_estimate_assumption': 'immediate playback respecting chunk arrivals; excludes client and speaker delay'}
 
 
 def receive(client: httpx.Client, path: str, payload: dict, identifier: str) -> tuple[bytes, dict]:
@@ -91,7 +121,7 @@ def receive(client: httpx.Client, path: str, payload: dict, identifier: str) -> 
         headers_ms = (time.perf_counter() - started) * 1000
         allowed_headers = {'content-type', 'x-request-id', 'x-aegis-request-id', 'x-aegis-voice-profile',
                            'x-aegis-audio-format', 'x-aegis-sample-rate', 'x-aegis-channels',
-                           'x-aegis-tts-source-commit', 'x-aegis-tts-dsp-variant'}
+                           'x-aegis-tts-source-commit', 'x-aegis-tts-dsp-variant', 'x-aegis-tts-runtime-variant'}
         safe_headers = {key: value for key, value in response.headers.items() if key.lower() in allowed_headers}
         for chunk in response.iter_bytes():
             if not chunk:
@@ -107,7 +137,7 @@ def receive(client: httpx.Client, path: str, payload: dict, identifier: str) -> 
         'headers_ms': headers_ms, 'first_pcm_ms': chunks[0]['ms'] if chunks else None,
         'first_nonsilent_ms': first_nonsilent, 'eof_ms': (time.perf_counter() - started) * 1000,
         'audio_ms': len(raw) / 48, 'chunks': chunks,
-        **audible_estimate(bytes(raw), chunks[0]['ms'] if chunks else None)}
+        **audible_estimate(bytes(raw), chunks[0]['ms'] if chunks else None, chunks)}
 
 
 def samples(cases: list[str], repetitions: int):
@@ -180,7 +210,7 @@ def benchmark(directory: Path, url: str, cases: list[str], repetitions: int) -> 
 def render(raw: bytes, chunks: list[dict], variant: str, *, paced: bool,
            eof_ms: float | None = None) -> tuple[bytes, dict]:
     processor, reassembler = AcousticStreamProcessor(initial_segment=variant), Pcm16Reassembler()
-    output, offset, first, nonsilent = [], 0, None, None
+    output, emissions, offset, first, nonsilent = [], [], 0, None, None
     started, cpu_started = time.perf_counter(), time.process_time()
     processor_offset = processor._started - started
 
@@ -200,6 +230,7 @@ def render(raw: bytes, chunks: list[dict], variant: str, *, paced: bool,
             if nonsilent is None and np.any(np.abs(np.frombuffer(block, dtype='<i2').astype(np.int32)) > 100):
                 nonsilent = elapsed
             output.append(block)
+            emissions.append({'ms': elapsed, 'bytes': len(block)})
 
     for item in chunks:
         wait_until(item['ms'])
@@ -232,7 +263,7 @@ def render(raw: bytes, chunks: list[dict], variant: str, *, paced: bool,
         'rms_pcm16': float(np.sqrt(np.mean(values * values))) if len(values) else 0,
         'clipped_samples': int(np.sum(np.abs(values) >= 32767)),
         'hard_seams': processor.metrics.hard_seams, 'natural_segments': processor.metrics.natural_segments,
-        **audible_estimate(pcm, first)}
+        'chunks': emissions, **audible_estimate(pcm, first, emissions)}
     return pcm, metrics
 
 

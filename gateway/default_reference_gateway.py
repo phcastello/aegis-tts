@@ -27,6 +27,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response, StreamingResponse
 
 from voice_pipeline import AcousticStreamProcessor, Pcm16Reassembler, PcmProtocolError
+from output_onset import OutputOnsetTrimmer
 from aegis_speech.domain import RequestStatus, SegmentStatus, SpeechRequest, SpeechSegment
 from aegis_speech.lexicon import PronunciationLexicon
 from aegis_speech.normalization import SpeechTextNormalizer
@@ -51,6 +52,14 @@ NATIVE_PROFILE = "AegisVoicev1.0"
 INITIAL_SEGMENT = os.environ.get("AEGIS_TTS_INITIAL_SEGMENT", "stable")
 PROFILE_LATENCY = os.environ.get("AEGIS_TTS_PROFILE_LATENCY") == "1"
 SOURCE_COMMIT = os.environ.get("AEGIS_TTS_SOURCE_COMMIT", "unknown")
+CODEC_BATCH_FRAMES = int(os.environ.get("AEGIS_TTS_CODEC_BATCH_FRAMES", "25"))
+INITIAL_CODEC_FRAMES = int(os.environ.get("AEGIS_TTS_INITIAL_CODEC_FRAMES", "1"))
+ONSET_TRIM = os.environ.get("AEGIS_TTS_ONSET_TRIM", "off")
+if CODEC_BATCH_FRAMES not in {16, 22, 25} or not 1 <= INITIAL_CODEC_FRAMES <= CODEC_BATCH_FRAMES:
+    raise ValueError("initial codec frames must be between 1 and the configured codec batch size")
+if ONSET_TRIM not in {"off", "conservative-v1"}:
+    raise ValueError("unsupported synthesized output onset variant")
+RUNTIME_VARIANT = f"{INITIAL_SEGMENT}-codec{INITIAL_CODEC_FRAMES}x{CODEC_BATCH_FRAMES}-onset-{ONSET_TRIM}"
 REQUEST_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 Q00_PARAMS: dict[str, Any] = {
@@ -106,6 +115,9 @@ class GatewayMetrics:
             "aegis_tts_first_processed_pcm_seconds": 0,
             "aegis_tts_first_nonsilent_pcm_seconds": 0,
             "aegis_tts_first_dsp_input_audio_seconds": 0,
+            "aegis_tts_first_raw_voice_seconds": 0,
+            "aegis_tts_first_output_pcm_seconds": 0,
+            "aegis_tts_onset_removed_seconds_total": 0,
         }
 
     def render(self) -> str:
@@ -337,6 +349,9 @@ def _apply_defaults(payload: dict[str, Any]) -> dict[str, Any]:
     request["x_vector_only_mode"] = False
     request["language"] = "Portuguese"
     request.update(Q00_PARAMS)
+    # Installed vLLM-Omni 0.22 accepts this field and propagates it into the
+    # async codec stage. Subsequent batch cadence comes from runtime_config.
+    request["initial_codec_chunk_frames"] = INITIAL_CODEC_FRAMES
     if request.get("stream"):
         request["stream_format"] = "audio"
         request["response_format"] = "pcm"
@@ -500,33 +515,53 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
         raise RuntimeError("upstream generation failed")
     stamps["upstream_headers_ms"] = (perf_counter() - started) * 1000
     reassembler, processor = Pcm16Reassembler(), AcousticStreamProcessor(SAMPLE_RATE, initial_segment=INITIAL_SEGMENT)
+    onset = OutputOnsetTrimmer(SAMPLE_RATE) if ONSET_TRIM == "conservative-v1" else None
     processor_offset_ms = (perf_counter() - started) * 1000
-    first_raw = first_processed = first_nonsilent = True
+    first_raw = first_raw_voice = first_processed = first_output = first_nonsilent = True
     dsp_seconds = 0.0
     received_samples = 0
+    emitted_samples = 0
 
     def observe(rendered: bytes) -> None:
-        nonlocal first_processed, first_nonsilent
+        nonlocal first_output, first_nonsilent, emitted_samples
         elapsed = perf_counter() - started
-        if first_processed:
-            first_processed = False
-            stamps["first_processed_pcm_ms"] = elapsed * 1000
-            app.state.metrics.values["aegis_tts_first_processed_pcm_seconds"] = elapsed
+        emitted_samples += len(rendered) // 2
+        if first_output:
+            first_output = False
+            stamps["first_output_pcm_ms"] = elapsed * 1000
+            app.state.metrics.values["aegis_tts_first_output_pcm_seconds"] = elapsed
         if first_nonsilent and np.any(np.abs(np.frombuffer(rendered, dtype="<i2").astype(np.int32)) > 100):
             first_nonsilent = False
             stamps["first_nonsilent_pcm_ms"] = elapsed * 1000
             app.state.metrics.values["aegis_tts_first_nonsilent_pcm_seconds"] = elapsed
+
+    def output(rendered: bytes) -> list[bytes]:
+        nonlocal first_processed
+        if rendered and first_processed:
+            first_processed = False
+            elapsed = perf_counter() - started
+            stamps["first_processed_pcm_ms"] = elapsed * 1000
+            app.state.metrics.values["aegis_tts_first_processed_pcm_seconds"] = elapsed
+        return onset.push(rendered) if onset is not None else [rendered]
 
     try:
         async for chunk in upstream.aiter_bytes():
             if cancelled.is_set():
                 return
             samples = reassembler.feed(chunk)
+            before_samples = received_samples
             received_samples += len(samples)
             if len(samples) and first_raw:
                 first_raw = False
                 stamps["first_raw_pcm_ms"] = (perf_counter() - started) * 1000
                 app.state.metrics.values["aegis_tts_first_raw_pcm_seconds"] = stamps["first_raw_pcm_ms"] / 1000
+            if first_raw_voice and len(samples):
+                indexes = np.flatnonzero(np.abs(samples) > 100 / 32768)
+                if len(indexes):
+                    first_raw_voice = False
+                    stamps["first_raw_voice_ms"] = (perf_counter() - started) * 1000
+                    stamps["raw_leading_nonsilent_audio_ms"] = (before_samples + int(indexes[0])) / SAMPLE_RATE * 1000
+                    app.state.metrics.values["aegis_tts_first_raw_voice_seconds"] = stamps["first_raw_voice_ms"] / 1000
             # One processor belongs to one sequential adapter. WORLD and the
             # stateful mastering chain run on a worker to reduce event-loop
             # stalls (C extensions can still hold the GIL). Bounded
@@ -540,8 +575,10 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
                 dsp_seconds += perf_counter() - before
                 for rendered in rendered_chunks:
                     if rendered and not cancelled.is_set():
-                        observe(rendered)
-                        yield rendered
+                        for block in output(rendered):
+                            if block and not cancelled.is_set():
+                                observe(block)
+                                yield block
         if cancelled.is_set():
             return
         reassembler.finish()
@@ -551,14 +588,23 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
         dsp_seconds += perf_counter() - before
         for rendered in final_chunks:
             if rendered and not cancelled.is_set():
-                observe(rendered)
-                yield rendered
+                for block in output(rendered):
+                    if block and not cancelled.is_set():
+                        observe(block)
+                        yield block
+        if onset is not None and not cancelled.is_set():
+            for block in onset.finish():
+                if block and not cancelled.is_set():
+                    observe(block)
+                    yield block
     finally:
         await upstream.aclose()
         values, metrics = app.state.metrics.values, processor.metrics
         values["aegis_audio_received_seconds_total"] += received_samples / SAMPLE_RATE
         values["aegis_audio_processed_seconds_total"] += metrics.audio_processed_samples / SAMPLE_RATE
-        values["aegis_audio_emitted_seconds_total"] += metrics.audio_emitted_samples / SAMPLE_RATE
+        values["aegis_audio_emitted_seconds_total"] += emitted_samples / SAMPLE_RATE
+        removed_samples = onset.metrics.removed_samples if onset is not None else 0
+        values["aegis_tts_onset_removed_seconds_total"] += removed_samples / SAMPLE_RATE
         values["aegis_segments_natural_total"] += metrics.natural_segments
         values["aegis_segments_hard_seam_total"] += metrics.hard_seams
         values["aegis_tts_dsp_seconds"] += dsp_seconds
@@ -570,7 +616,11 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
             runtime = app.state.service.runtimes.get(segment.request_id)
             if runtime:
                 app.state.service.event(runtime, "synthesis_profiled", segment_index=segment.segment_index,
-                    initial_segment=INITIAL_SEGMENT, cancelled=cancelled.is_set(), **stamps,
+                    initial_segment=INITIAL_SEGMENT, runtime_variant=RUNTIME_VARIANT,
+                    initial_codec_chunk_frames=INITIAL_CODEC_FRAMES, codec_chunk_frames=CODEC_BATCH_FRAMES,
+                    onset_removed_ms=removed_samples / SAMPLE_RATE * 1000,
+                    onset_decision=onset.metrics.decision if onset is not None else "disabled",
+                    cancelled=cancelled.is_set(), **stamps,
                     dsp_ms=dsp_seconds * 1000, world_ms=metrics.world_seconds * 1000,
                     world_cpu_ms=metrics.world_cpu_seconds * 1000,
                     render_cpu_ms=metrics.dsp_cpu_seconds * 1000,
@@ -580,7 +630,8 @@ async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> 
                     first_dsp_end_ms=processor_offset_ms + metrics.first_render_finished_seconds * 1000 if metrics.first_render_finished_seconds is not None else None,
                     adapter_eof_ms=(perf_counter() - started) * 1000,
                     audio_received_ms=received_samples / SAMPLE_RATE * 1000,
-                    audio_emitted_ms=metrics.audio_emitted_samples / SAMPLE_RATE * 1000)
+                    dsp_audio_emitted_ms=metrics.audio_emitted_samples / SAMPLE_RATE * 1000,
+                    audio_emitted_ms=emitted_samples / SAMPLE_RATE * 1000)
 
 
 async def _processed_stream(upstream: httpx.Response, mode: str) -> AsyncIterator[bytes]:
@@ -728,7 +779,8 @@ async def _submit_native(payload: dict[str, Any]) -> Runtime:
 
 
 def _runtime_headers() -> dict[str, str]:
-    return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT, "X-Aegis-TTS-DSP-Variant": INITIAL_SEGMENT}
+    return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT, "X-Aegis-TTS-DSP-Variant": INITIAL_SEGMENT,
+            "X-Aegis-TTS-Runtime-Variant": RUNTIME_VARIANT}
 
 
 def _native_headers(request_id: str, response_format: str) -> dict[str, str]:
