@@ -1,0 +1,143 @@
+# cotidiano
+A janela ficou entreaberta durante a madrugada, e o vento espalhou as folhas que estavam sobre a mesa.
+Você prefere caminhar pelo parque depois do almoço ou esperar o calor diminuir no fim da tarde?
+A chave pequena está no bolso lateral da mochila azul, junto ao bilhete que você guardou ontem.
+Não encontrei a embalagem original, mas conferi o nome do produto e o prazo de validade antes de separar tudo.
+O elevador parou no terceiro andar, embora ninguém tivesse apertado aquele botão durante a subida.
+A entrega chegou mais cedo do que o previsto, e a portaria avisou assim que o pacote foi recebido.
+Você lembra se fechou a torneira da área de serviço antes de sair para o trabalho hoje de manhã?
+O café esfriou enquanto a conversa se alongava, mas ninguém pareceu ter pressa de encerrar o encontro.
+A biblioteca mudou o horário de funcionamento nesta semana; vale conferir o aviso antes de planejar a visita.
+Guardei os documentos em uma pasta identificada para facilitar a busca quando você precisar deles novamente.
+O cachorro da vizinha deitou perto do portão e acompanhou em silêncio o movimento tranquilo da rua.
+A receita pede que a massa descanse por alguns minutos antes de receber o recheio e ir ao forno.
+# perguntas
+Como você explicaria essa diferença para alguém que conhece o assunto, mas nunca usou esse equipamento antes?
+Qual parte da proposta precisa de mais detalhes para que a equipe consiga tomar uma decisão com segurança?
+Se a reunião começar depois do previsto, ainda teremos tempo para revisar os números antes da apresentação?
+Você quer uma resposta direta agora ou prefere que eu organize primeiro os pontos que ainda estão em aberto?
+O que mudou entre a primeira tentativa e o resultado que acabou funcionando tão bem desta vez?
+Há alguma restrição de horário, distância ou acessibilidade que eu deva considerar ao organizar as opções?
+Por que a luz parece mais azul no início da manhã, mesmo quando o céu está completamente limpo?
+De quem é a ideia de transformar o antigo depósito em uma sala de leitura aberta aos moradores?
+Será que o ruído veio da rua ou começou dentro do próprio aparelho quando a ventilação aumentou?
+Quando você diz que está lento, está falando da abertura da tela ou do tempo necessário para concluir a tarefa?
+Onde devemos registrar essa observação para que ela continue visível durante as próximas etapas do projeto?
+Você percebe alguma diferença na pronúncia dessa palavra quando ela aparece sozinha ou no meio de uma frase?
+# numeros
+A temperatura caiu de vinte e oito para vinte e dois graus durante a noite, segundo o termômetro da varanda.
+A reunião começa às 14h35 e deve terminar antes das 16h, com um intervalo curto entre as apresentações.
+No dia 7 de setembro de 2027, a exposição terá entrada gratuita para visitantes de todas as idades.
+O recipiente comporta 750 mililitros, mas a receita usa apenas meio litro de água e duas colheres de óleo.
+A distância total é de 12,6 quilômetros, incluindo o trecho de 850 metros que será percorrido a pé.
+O orçamento estimado ficou em R$ 1.248,90, já considerando a taxa de entrega e os materiais de instalação.
+Entre 1998 e 2004, o arquivo recebeu mais de três mil fotografias de famílias que viveram na região.
+A versão 2.4.1 corrigiu o problema identificado na versão anterior, sem alterar o formato dos arquivos existentes.
+O relógio marcou 00h05 quando o último trem saiu da estação e as portas foram fechadas para a limpeza.
+A pressão indicada foi de 1,8 bar, dentro da faixa descrita no manual de operação do equipamento.
+Dividir 144 por 12 resulta em doze; somar 37 a esse valor produz um total de quarenta e nove.
+O sensor mede 3,5 centímetros de largura e pesa 48 gramas, sem contar o cabo e o suporte de fixação.
+# tecnica
+O certificado expirou durante a madrugada, e o navegador passou a recusar a conexão com aquele endereço.
+A fila mantém a ordem das solicitações e libera os recursos assim que uma tarefa é concluída ou cancelada.
+Um arquivo pode existir no disco e ainda estar incompleto se a gravação for interrompida antes do encerramento.
+A memória disponível diminuiu durante o processamento, mas voltou ao nível esperado quando os dados temporários foram liberados.
+O microfone registra o som ambiente, enquanto a saída de áudio envia a resposta sintetizada para o alto-falante.
+O endereço IP identifica o destino na rede; a porta informa qual serviço deve receber aquela conexão.
+A atualização do banco de dados precisa preservar os registros anteriores e permitir a retomada em caso de falha.
+O gráfico mostra uma oscilação periódica, mas ainda não há evidência suficiente para atribuir a causa ao sensor.
+Uma assinatura digital permite verificar a origem e a integridade do documento sem revelar a chave privada de quem assinou.
+O espectrograma representa como a energia do som se distribui entre frequências ao longo do tempo.
+Antes de trocar o componente, confirme o encaixe, a alimentação elétrica e a compatibilidade indicada pelo fabricante.
+O algoritmo encontrou duas soluções válidas, embora uma delas exija menos memória e seja mais fácil de manter.
+# negativas
+Não vou tratar uma hipótese como fato confirmado; ainda precisamos verificar a origem dessa informação antes de usá-la.
+A resposta não está naquele arquivo, e repetir a mesma busca sem mudar o critério provavelmente não vai ajudar.
+Não é necessário refazer tudo: os resultados conferidos continuam válidos, e podemos retomar a partir da etapa seguinte.
+Eu não tenho dados suficientes para afirmar que houve uma falha, mas consigo indicar quais verificações esclarecem a situação.
+Esse prazo não inclui o tempo de transporte, que depende da cidade de destino e da disponibilidade da transportadora.
+Não cancelei a tarefa anterior; ela continua aguardando na fila até que você decida se quer interrompê-la.
+A ausência de um aviso não confirma que o processo terminou; consulte o estado final antes de fechar a janela.
+Não encontrei sinais de alteração no documento, porém a confirmação depende de uma assinatura que ainda precisa ser validada.
+Nenhuma das três opções atende ao limite de espaço informado, então precisamos revisar uma das dimensões do projeto.
+A palavra foi reconhecida com baixa confiança, e prefiro preservar a dúvida a substituir por uma escolha arbitrária.
+Não há motivo para aumentar o volume agora; o trecho silencioso faz parte da gravação recebida.
+O nome da rua não mudou, mas a numeração das casas foi atualizada depois da construção da nova entrada.
+# confirmacoes
+Confirmado: a solicitação foi recebida, o horário está registrado e os detalhes podem ser revisados antes da execução.
+Sim, encontrei a diferença. O valor final inclui uma parcela que não aparecia no primeiro resumo enviado.
+Está tudo pronto para a próxima etapa; vou manter o resultado atual disponível enquanto você confere os detalhes.
+Entendi a preferência. Nas próximas sugestões, vou considerar trajetos curtos e locais que ofereçam acesso sem escadas.
+A alteração foi salva, e a cópia anterior continua identificada caso seja necessário comparar os dois resultados depois.
+Conferi novamente: os nomes estão na mesma ordem do documento original, incluindo os acentos e os sobrenomes compostos.
+Podemos seguir. O teste terminou sem erros, e o resultado corresponde ao comportamento descrito no pedido inicial.
+Certo, vou usar a medida em centímetros e manter duas casas decimais para facilitar a comparação entre as peças.
+A pausa está registrada. Quando você quiser continuar, retomaremos do último ponto concluído sem repetir as etapas anteriores.
+Sim, a pergunta faz sentido. A diferença aparece quando separamos o tempo de espera do tempo efetivo de processamento.
+O lembrete foi ajustado para o horário combinado, considerando o fuso local informado na configuração deste dispositivo.
+Recebi as duas versões e identifiquei qual delas contém a revisão mais recente da tabela e das observações finais.
+# aegis
+Eu sou a Aegis. Posso organizar as informações, acompanhar o contexto e ajudar você a transformar uma dúvida em uma próxima ação.
+Temos duas possibilidades bem definidas. Vou explicar o custo de cada uma para que a escolha fique mais simples.
+Vou manter essa resposta curta porque você já tem o contexto; o ponto principal é o intervalo entre as duas medições.
+Posso estar interpretando uma parte do pedido de forma incompleta, então vou tornar explícita a suposição que estou usando.
+Esse detalhe merece atenção: o resultado parece correto à primeira vista, mas depende de uma condição que ainda não foi verificada.
+A ideia é boa o bastante para um teste pequeno. Vamos observar o resultado antes de transformar a tentativa em uma regra.
+Há um caminho mais simples para chegar ao mesmo objetivo, com menos etapas manuais e um resultado mais fácil de conferir.
+Minha prioridade aqui é preservar o que já funciona e melhorar apenas a parte cuja limitação conseguimos demonstrar.
+Você pode mudar de direção sem perder o trabalho feito; deixei os pontos de retomada claramente identificados.
+Vou apresentar primeiro o resultado e depois a evidência necessária para você avaliar o alcance dessa conclusão.
+Não vou inventar certeza para encerrar a conversa. Posso ajudar a reduzir a dúvida com uma verificação objetiva.
+Por enquanto, a opção mais prudente é manter a configuração atual e preparar uma comparação que possa ser repetida.
+# natureza
+Depois da chuva, o cheiro da terra molhada atravessou o jardim e chegou até a varanda onde o livro tinha ficado aberto.
+O rio faz uma curva larga antes da ponte, e a correnteza parece mais forte perto das pedras da margem direita.
+As nuvens cobriram o sol por poucos minutos, o suficiente para mudar a cor do vale e a temperatura do caminho.
+Uma borboleta pousou na borda do vaso enquanto as folhas pequenas ainda guardavam algumas gotas da rega da manhã.
+No alto da trilha, o vento dificultava a conversa, mas a vista permitia reconhecer as duas cidades ao fundo.
+A árvore perdeu muitas folhas no período seco e começou a formar novos brotos assim que as chuvas voltaram.
+A previsão indica céu parcialmente nublado, com possibilidade de pancadas isoladas no começo da noite em áreas próximas à serra.
+A maré estava baixa quando os barcos retornaram, e os pescadores precisaram esperar antes de se aproximar do cais.
+O horizonte ficou alaranjado por alguns instantes, e depois as primeiras luzes da cidade começaram a aparecer entre os prédios.
+A sombra do muro avançava lentamente sobre o quintal enquanto a tarde diminuía o brilho nas janelas do outro lado da rua.
+O canto dos pássaros se misturou ao barulho distante de um ônibus, formando um fundo constante para a manhã de domingo.
+A nascente permanece protegida por uma faixa de vegetação que ajuda a conservar a água e a estabilidade do solo.
+# cultura
+A personagem voltou à cidade depois de muitos anos e reconheceu a praça pelo som do relógio da antiga estação.
+O museu reúne objetos do cotidiano que ajudam a entender como as pessoas trabalhavam, viajavam e se comunicavam naquela época.
+A melodia começa de forma discreta e ganha intensidade quando os instrumentos de sopro entram na segunda parte da apresentação.
+A tradução preserva o sentido da passagem, embora a escolha de algumas palavras torne a leitura mais formal que no original.
+O autor descreve uma viagem curta, mas usa os encontros do caminho para discutir mudanças que levaram décadas para acontecer.
+Na fotografia, a luz vem de uma janela lateral e destaca os detalhes do tecido sem esconder a expressão da pessoa retratada.
+A oficina recebeu participantes de idades diferentes, e cada grupo encontrou uma maneira própria de interpretar a mesma proposta.
+O filme termina com uma pergunta aberta, deixando que o público complete a história a partir das pistas espalhadas pelas cenas.
+A coleção da biblioteca inclui obras em português, espanhol e francês, além de edições adaptadas para leitores iniciantes.
+O painel foi restaurado com materiais compatíveis para preservar as cores e permitir que intervenções futuras sejam reconhecidas.
+O teatro reabriu depois da reforma, com melhorias no acesso, na iluminação e na distribuição dos assentos da plateia.
+A conversa sobre o livro começou pelas personagens e acabou se transformando em uma discussão sobre memória e pertencimento.
+# nomes_pronuncia
+João, Márcia e Luís combinaram de encontrar Débora na estação antes de seguir para a feira de ciências da universidade.
+A viagem entre São Luís e Belém exige atenção ao horário de chegada, principalmente quando há conexão em outra cidade.
+Em Recife, o grupo visitou uma exposição sobre a formação dos bairros e a relação histórica da cidade com os rios.
+O relatório de Júlia compara a produção de café em Minas Gerais com dados de outras regiões brasileiras ao longo da década.
+A palavra exceção contém um som que pode causar dúvida na escrita, assim como enxergar, excesso e consciência.
+O pequeno aquário tinha pedras claras, plantas aquáticas e uma iluminação que variava de intensidade ao longo do dia.
+Na próxima quarta-feira, a pesquisadora apresentará uma síntese dos resultados e responderá às perguntas dos participantes.
+O engenheiro explicou por que a engrenagem precisa de lubrificação regular para reduzir o desgaste e o aquecimento das peças.
+A chuva chegou de repente, e Guilherme fechou a janela para proteger os papéis que estavam perto da cortina.
+Carolina pediu uma xícara de chá, um pão de queijo e alguns minutos para terminar a leitura antes de sair.
+A técnica de ultrassom permite observar estruturas internas sem recorrer ao mesmo princípio usado pelos exames de raios X.
+O número de série mistura letras e algarismos; confira cada caractere com atenção antes de registrar o equipamento no inventário.
+# extensoes
+Sim.
+Ainda não.
+Pode continuar.
+Qual horário?
+Tudo pronto?
+Prefiro esperar.
+Confirma essa medida?
+Vamos por etapas.
+Quando o laboratório recebeu a primeira amostra, a equipe percebeu que os valores variavam conforme a posição do sensor; por isso, decidiu registrar cada mudança, repetir as medições em horários diferentes e manter os arquivos originais disponíveis até que outra pessoa pudesse conferir a conclusão sem depender de explicações adicionais.
+Se você quiser comparar as duas propostas com calma, podemos começar pelos requisitos que ambas atendem, observar em seguida as diferenças de custo e manutenção e terminar pelos pontos que ainda precisam de teste, deixando claro quais decisões podem ser revistas depois e quais escolhas exigem uma preparação mais cuidadosa antes de avançar.
+A visita começou na sala onde estavam os mapas antigos, passou por uma pequena exposição de instrumentos usados na navegação e terminou em uma varanda aberta para o rio; durante todo o percurso, a guia relacionou os objetos às histórias das pessoas que viveram naquela região e ajudaram a transformar a paisagem.
+Embora a primeira tentativa tenha produzido um resultado promissor, ainda precisamos conferir se o comportamento se repete com textos curtos e longos, se as palavras iniciais permanecem completas, se os números são pronunciados corretamente e se a nova configuração consegue preservar as características da voz sem aumentar o consumo de recursos durante o uso cotidiano.

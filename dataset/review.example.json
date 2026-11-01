@@ -1,0 +1,11 @@
+{
+  "processed_master_sha256": "REPLACE_WITH_ACTUAL_PROCESSED_MASTER_SHA256",
+  "reviewer": "REPLACE_WITH_REVIEWER",
+  "reviewed_at": "REPLACE_WITH_ISO8601_DATE",
+  "examples": {
+    "REPLACE_WITH_EXAMPLE_ID": {
+      "content_review": "approved",
+      "evidence": "Independent content audit passed and stratified sample approved; manually reviewed when flagged."
+    }
+  }
+}

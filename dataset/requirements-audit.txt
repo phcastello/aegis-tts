@@ -1,0 +1,4 @@
+# Optional CPU content audit in an isolated environment. No models bundled/downloaded.
+-r requirements.txt
+faster-whisper==1.1.1
+ctranslate2==4.5.0

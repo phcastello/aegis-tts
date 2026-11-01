@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aegis single-master processed JSONL record",
+  "type": "object",
+  "required": ["id", "group_id", "text", "split", "audio_filepath", "duration", "sample_rate", "sha256", "quality_status", "alignment_status", "content_review", "source_master_sha256", "processed_master_sha256", "provenance"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "group_id": {"type": "string", "minLength": 1},
+    "text": {"type": "string", "minLength": 1},
+    "split": {"enum": ["train", "validation", "test"]},
+    "audio_filepath": {"type": "string"},
+    "duration": {"type": "number", "minimum": 0},
+    "sample_rate": {"type": "integer", "minimum": 8000, "maximum": 192000},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "quality_status": {"enum": ["accepted", "quarantine"]},
+    "alignment_status": {"enum": ["aligned", "quarantine"]},
+    "content_review": {"enum": ["pending", "approved", "rejected"]},
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "source_master_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "processed_master_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "provenance": {"type": "object"}
+  }
+}
