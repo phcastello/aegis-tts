@@ -47,3 +47,22 @@ formato atuais. A prioridade é 0–100; as políticas aceitas são `enqueue`,
 
 Para WAV não streaming, envie `"stream":false,"response_format":"wav"`.
 Para PCM streaming, envie `"stream":true,"response_format":"pcm"`.
+
+## Identificação operacional e latência
+
+`X-Aegis-TTS-Source-Commit` identifica a fonte da imagem e
+`X-Aegis-TTS-Runtime-Variant` identifica chunk inicial/contínuo, corte de abertura
+e reserva inicial de streaming. `X-Aegis-TTS-DSP-Variant` continua identificando
+a segmentação WORLD. Clientes preservam os mesmos contratos de áudio.
+
+A candidata de latência mantém o perfil vocal e retira somente silêncio inicial
+comprovado, preservando áudio incerto e margem antes da fala. A reserva de
+streaming tem custo explícito na primeira chegada HTTP e permite continuidade;
+WAV não streaming não recebe essa espera. Eventos SSE existentes permanecem;
+`stream_startup_buffering`, `stream_startup_released` e
+`stream_startup_cancelled` são observações adicionais. Se a síntese já concluiu
+durante a reserva, DELETE preserva o estado histórico `completed`, mas descarta
+a entrega ainda não iniciada.
+
+Medições, variante implantada, limitações auditivas e rollback estão no
+[relatório de produção](v0.8.0/production-latency-20261101.md).

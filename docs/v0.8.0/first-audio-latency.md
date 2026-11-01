@@ -1,5 +1,10 @@
 # Primeiro áudio — experimento v0.8.0
 
+Continuação em 01/11/2026: o [novo relatório operacional](production-latency-20261101.md)
+registra a matriz dirigida, corte incremental de silêncio, configuração implantada,
+continuidade e medição de primeira fala. As seções abaixo preservam o histórico
+da implantação anterior `ba1beb9` e não descrevem a variante atual.
+
 ## Estado e evidência
 
 Em 31/10/2026 o endpoint privado `http://10.1.1.47:8001` estava pronto,

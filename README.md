@@ -8,6 +8,13 @@ O gateway usa a imagem vLLM-Omni fixada por digest e o modelo
 `Qwen3-TTS-12Hz-0.6B-Base`. Ele mantém a referência e a transcrição no mount
 local `protected/AegisVoicev1.0`, nunca no request, nos logs ou na imagem.
 
+O [relatório de latência em produção](docs/v0.8.0/production-latency-20261101.md)
+registra a candidata operacional, tempos até a primeira fala, checks e rollback.
+O [pipeline da nova voz](docs/dataset-single-master.md) prepara um único WAV para
+uma operação no Melodyne; geração e treino continuam dependentes de aprovação.
+A [seleção de arquitetura](docs/new-voice-preparation.md) permanece separada do
+runtime atual.
+
 ## Usos principais
 
 O serviço expõe três usos básicos:
