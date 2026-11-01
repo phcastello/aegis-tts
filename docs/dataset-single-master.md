@@ -186,18 +186,65 @@ revisão estratificada por categoria e split, incluindo primeiras consoantes,
 números, nomes, frases longas, exemplos lentos e todos os sinalizados. Não é
 necessário editar clipes manualmente para essa revisão.
 
-Depois da checagem de conteúdo e amostragem, preparar revisão privada conforme
-`dataset/review.example.json`, com evidência por ID, identidade/data do revisor e
-hash do master tratado. Reexecutar `extract --review /CAMINHO_PRIVADO/review.json`.
-Aprovação de outro export é recusada. Rejeitados vão para quarentena; aprovados
-mantêm a transcrição original. Treinamento só deve importar registros
-`quality_status=accepted`, `alignment_status=aligned`, `content_review=approved`.
-A integração está em `training/`; nenhum treino pode usar a demonstração de tons.
+A aprovação em lote é preparada por `scripts/dataset_review.py`: o proprietário
+não escreve centenas de aprovações/evidências em JSON. Primeiro executar somente
+o plano, sem gravação (padrão), sobre o dataset ainda pendente, o relatório ASR
+e sua proveniência. `--corpus` deve apontar ao corpus exato aprovado.
+
+```bash
+python3 scripts/dataset_review.py \
+  --dataset /CAMINHO_PRIVADO/pilot/processed/dataset.jsonl \
+  --content-audit /CAMINHO_PRIVADO/pilot/content-audit/content-audit.jsonl \
+  --audit-provenance /CAMINHO_PRIVADO/pilot/content-audit/content-audit-provenance.json \
+  --corpus dataset/corpus.pt-BR.jsonl
+```
+
+O plano fornece `owner_review_template`, hashes exatos e `suggested_sampled_ids`,
+com pelo menos um exemplo por estrato existente de categoria e split entre os
+candidatos aprováveis. Salvar esse único template como `owner-review.json` privado.
+Ouvir/conferir a amostra sugerida (ou outra com a mesma cobertura), incluindo
+identidade/efeito, consoantes iniciais, números, nomes, prosódia e cortes. Preencher
+apenas revisor/data/referência da aprovação, os IDs efetivamente conferidos e
+`batch_sample_approved=true`, `perceptual_sample_approved=true` **depois** da
+aprovação explícita do proprietário. O script não marca que alguém ouviu por conta
+própria, e aprovação ASR sozinha não aprova qualidade perceptiva.
+
+O template vincula SHA256 de corpus, dataset, relatório e proveniência ASR,
+manifesto e masters bruto/tratado. O helper confere também o arquivo tratado real,
+os hashes de todos os clipes, texto/grupo/split contra o corpus e recalcula a
+comparação ASR. Alterar qualquer entrada exige novo plano e nova aprovação.
+A categoria vem do corpus vinculado; ela não é inferida da transcrição reconhecida.
+
+Somente exceções ASR precisam de decisão específica, em
+`flagged_reviews: {"ID": {"decision": "approved", "evidence": "checagem feita"}}`
+ou `decision: "rejected"`. Sem decisão, ficam `pending`, sem bloquear os bons.
+Se uma exceção aprovada criar outro estrato, incluir também esse ID na amostra
+conferida. Quarentena técnica e fixtures sintéticas nunca são promovidas pelo
+helper. Não corrigir transcrições ou áudio para obter uma aprovação automática.
+
+Para gerar a revisão em lote, repetir os argumentos do plano e acrescentar:
+
+```text
+--owner-review /CAMINHO_PRIVADO/owner-review.json \
+--write-review --output /CAMINHO_PRIVADO/review.json
+```
+
+`--write-review` é opt-in; sem ele nada é gravado, mesmo com configuração aprovada.
+A saída contém automaticamente a evidência e os hashes por exemplo. O antigo
+`dataset/review.example.json` descreve o formato de saída individual e pode ser
+usado para casos pequenos; não é uma obrigação de edição manual por clipe.
+Reexecutar `extract --review /CAMINHO_PRIVADO/review.json`. O extrator confere
+hash do export, manifesto e hashes de áudio vinculados à aprovação em lote.
+Preservar o dataset/relatório ASR originais usados na revisão para rastreabilidade.
+Rejeitados vão para quarentena; pendentes continuam fora do treino. O treinamento
+só importa `quality_status=accepted`, `alignment_status=aligned`,
+`content_review=approved`. A integração está em `training/`; nenhum treino pode
+usar a demonstração de tons. Nenhuma revisão real foi produzida nesta entrega.
 
 ## Reprodução dos testes pequenos
 
 ```bash
-python3 -m pytest -q tests/test_dataset_pipeline.py
+python3 -m pytest -q tests/test_dataset_pipeline.py tests/test_dataset_review.py
 python3 scripts/dataset_demo.py \
   --output-dir /var/tmp/aegis-tts-dataset-20261101/synthetic-demo
 ```
@@ -206,6 +253,7 @@ Trinta testes passaram: cache/hash, dry-run sem provedor, teto, aprovação vinc
 ao corpus, manifesto/WAV único, pausa interna de 3,2 s, separador alterado,
 padding inicial/final, resampling, caudas, segmento ausente sem deslocar IDs,
 stretch global, revisão vinculada ao export, comparação de conteúdo, WAV truncado, extremos ausentes em layout repetitivo, tetos NaN/Inf, preflight de memória, ordem alterada, deslocamento local com duração total preservada, clipping e duplicações.
+Outros 17 testes sintéticos validam o helper de revisão: plano sem escrita, aprovação em lote sem decisões manuais por ID bom, cobertura por categoria/split, autorização perceptiva explícita, bindings de todos os hashes, flags pendentes/rejeitadas, recusa de auditoria adulterada, clipes alterados, fixtures e permissões privadas. Total: 47 testes.
 Esses testes validam mecânica do pipeline; não validam fala PT-BR nem a receita
 Melodyne. O próximo passo real continua sendo revisão/aprovação de corpus,
 provedor/voz/direitos/orçamento, seguido do piloto autorizado e do único export tratado.

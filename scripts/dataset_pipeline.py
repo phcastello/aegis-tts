@@ -540,6 +540,8 @@ def extract(manifest_path: Path, processed: Path, destination: Path,
     processed_hash = file_digest(processed)
     if review and review.get('processed_master_sha256') != processed_hash:
         raise ValueError('review does not refer to this processed master SHA256')
+    if review.get('manifest_sha256') and review['manifest_sha256'] != file_digest(manifest_path):
+        raise ValueError('review does not refer to this manifest SHA256')
     decisions = review.get('examples', {})
     observed = quiet_runs(values, rate)
     mapping = match_gaps(manifest['gaps'], observed, source_count, len(values), old_active, new_active)
@@ -636,6 +638,8 @@ def extract(manifest_path: Path, processed: Path, destination: Path,
         content_review = decision.get('content_review', 'pending')
         if content_review not in ('pending', 'approved', 'rejected'):
             raise ValueError('invalid content_review decision')
+        if content_review == 'approved' and decision.get('audio_sha256') and decision['audio_sha256'] != hashed:
+            raise ValueError('review audio SHA256 mismatch: ' + clip['id'])
         if content_review == 'approved' and (not review.get('reviewer') or not review.get('reviewed_at') or not decision.get('evidence')):
             raise ValueError('approved content requires reviewer, reviewed_at and per-example evidence')
         if content_review == 'rejected':
