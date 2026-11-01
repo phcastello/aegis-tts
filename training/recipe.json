@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "profile": "AegisVoicev2.0-PiperPTBR-pilot",
+  "status": "prepared-not-trained-not-approved",
+  "architecture": "Piper VITS with spectral posterior encoder and HiFi-GAN decoder",
+  "public_audio": {
+    "sample_rate": 24000,
+    "channels": 1,
+    "format": "s16le"
+  },
+  "frontend": {
+    "locale": "pt-BR",
+    "espeak_voice": "pt-br",
+    "phoneme_type": "espeak",
+    "num_symbols": 256
+  },
+  "features": {
+    "sample_rate": 22050,
+    "filter_length": 1024,
+    "hop_length": 256,
+    "win_length": 1024,
+    "mel_channels": 80,
+    "mel_fmin": 0.0,
+    "mel_fmax": null,
+    "center": false,
+    "waveform_normalization": "PCM16 / 32768, no per-clip loudness normalization",
+    "spectral_normalization": "natural log, clamp 1e-5, upstream Piper mel_processing"
+  },
+  "implementation": {
+    "repository": "https://github.com/OHF-Voice/piper1-gpl",
+    "revision": "639388b6317fc4731e91d53da42aea68fd4166ff",
+    "tag": "v1.8.0",
+    "code_license": "GPL-3.0-or-later"
+  },
+  "checkpoint": {
+    "repository": "rhasspy/piper-checkpoints",
+    "path": "pt/pt_BR/cadu/medium/epoch=5195-step=109116.ckpt",
+    "bytes": 845888150,
+    "sha256": "abd3e6c7237aca5b7cf9c3cfc50945bfef44a83a594e00186f584d9d11fd355a",
+    "dataset_license_in_model_card": "CC0",
+    "downloaded": false,
+    "revision": "37d1bea250e21ca0d617818d2bef1db724edb80c",
+    "repository_license": "MIT"
+  },
+  "inference_reference": {
+    "repository": "rhasspy/piper-voices",
+    "path": "pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx",
+    "bytes": 62950044,
+    "sha256": "765f0809a6ea9035d4a6d0d008dbf8876e68b2dd32029312672fa8f405bdb535",
+    "purpose": "architecture baseline only; never substitute this speaker for configured dataset voice",
+    "downloaded": false,
+    "revision": "b4e358ffcb232591bf73a540e70f7de528e4174a",
+    "repository_license": "MIT"
+  },
+  "training": {
+    "seed": 40733133,
+    "batch_size": 2,
+    "accumulate_grad_batches": 4,
+    "precision": "32-true",
+    "num_workers": 1,
+    "max_epochs_initial_review": 10,
+    "learning_rate": 5e-05,
+    "learning_rate_d": 2.5e-05,
+    "minimum_free_gpu_mib": 9000,
+    "requires_exclusive_window": true,
+    "requires_explicit_owner_authorization": true
+  },
+  "gates": [
+    "explicit owner authorization before checkpoint download or fine-tuning",
+    "master_processed.wav available",
+    "alignment and content approved",
+    "posterior-decoder roundtrip effect approved",
+    "exclusive training GPU window",
+    "held-out PT-BR pronunciation and effect review",
+    "real API latency/cancellation/resource tests",
+    "owner approval before deployment"
+  ]
+}

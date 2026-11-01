@@ -1,0 +1,24 @@
+# Python 3.12, separate environment. No installation in the production container.
+# PyTorch cu121 is compatible with host driver 535; do not copy CUDA13 runtime.
+torch==2.5.1+cu121
+piper-tts==1.8.0
+lightning==2.5.0.post0
+torchmetrics==1.6.1
+numpy==1.26.4
+scipy==1.13.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+onnx==1.17.0
+onnxruntime==1.20.1
+jsonargparse[signatures]==4.38.0
+tensorboard==2.19.0
+tensorboardX==2.6.2.2
+pysilero-vad==2.1.1
+Cython==3.0.12
+pathvalidate==3.2.3
+# Isolated source/monotonic-alignment build tools, pinned as well.
+scikit-build==0.18.1
+cmake==3.31.6
+ninja==1.11.1.4
+setuptools==75.8.0
+wheel==0.45.1
