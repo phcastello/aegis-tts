@@ -13,7 +13,7 @@ from typing import Callable, Iterator
 
 import numpy as np
 
-from .prepare_dataset import resample_pcm, sha256
+from .prepare_dataset import encode_pcm16, resample_pcm, sha256
 
 PROFILE = 'AegisVoicev2.0-PiperPTBR-pilot'
 
@@ -85,9 +85,7 @@ class PiperUnitAdapter:
                 emitted_samples += len(values)
                 if emitted_samples > self.max_audio_seconds * 24000:
                     raise ValueError('candidate exceeded per-unit resource limit')
-                if not np.all(np.isfinite(values)) or np.max(np.abs(values), initial=0) >= 1:
-                    raise ValueError('candidate output clipped/non-finite')
-                pcm = np.round(values * 32768).astype('<i2').tobytes()
+                pcm = encode_pcm16(values)
                 for start in range(0, len(pcm), 2400):  # 50 ms transport pieces
                     if cancelled():
                         return

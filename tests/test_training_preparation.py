@@ -16,7 +16,7 @@ from training.train_piper import partition_indices
 def record(identifier='a', split='train', **extra):
     row = {'id': identifier, 'text': 'Não corte a primeira palavra.', 'split': split,
            'quality_status': 'accepted', 'alignment_status': 'aligned', 'content_review': 'approved',
-           'source_master_sha256': '1'*64}
+           'source_master_sha256': '1'*64, 'processed_master_sha256': '2'*64}
     row.update(extra)
     return row
 
@@ -128,3 +128,27 @@ def test_training_guard_never_shares_the_production_gpu(monkeypatch):
                         lambda *args,**kwargs:SimpleNamespace(stdout='840\n'))
     with pytest.raises(RuntimeError,match='exclusive GPU capacity unavailable'):
         train_piper.gpu_available()
+
+
+def test_pcm16_rounding_never_wraps_near_positive_fullscale(tmp_path):
+    from training.prepare_dataset import encode_pcm16
+    for value in (.99999, .9999999):
+        with pytest.raises(ValueError,match='PCM16 quantization'):
+            write_pcm(tmp_path/'would-wrap.wav',np.array([value]),24000)
+        assert not (tmp_path/'would-wrap.wav').exists()
+    pcm = np.frombuffer(encode_pcm16(np.array([32767/32768, -.99999])),dtype='<i2')
+    assert list(pcm) == [32767,-32768]
+
+
+def test_adapter_rejects_quantization_overflow_without_a_wrapped_chunk():
+    class OverflowVoice:
+        def synthesize(self,text):
+            yield SimpleNamespace(sample_channels=1,sample_rate=24000,
+                                  audio_float_array=np.array([0.,.99999,0.]))
+    with pytest.raises(ValueError,match='PCM16 quantization'):
+        list(PiperUnitAdapter(OverflowVoice()).stream_unit('Overflow.'))
+
+
+def test_training_import_requires_treated_master_provenance():
+    with pytest.raises(ValueError,match='processed_master_sha256'):
+        select_records([record(processed_master_sha256='')])

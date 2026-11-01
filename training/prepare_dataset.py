@@ -51,14 +51,24 @@ def read_pcm(path: Path) -> tuple[np.ndarray, int]:
         return np.frombuffer(audio.readframes(audio.getnframes()), dtype='<i2').astype(np.float64) / 32768, rate
 
 
-def write_pcm(path: Path, values: np.ndarray, rate: int) -> None:
+def encode_pcm16(values: np.ndarray) -> bytes:
     if not np.all(np.isfinite(values)) or np.max(np.abs(values), initial=0) >= 1:
         raise ValueError('non-finite/clipped audio; review instead of silently limiting')
+    quantized = np.round(values * 32768)
+    # A float below +1 can still round to +32768. Casting that value directly
+    # to int16 wraps to -32768 and creates an audible full-scale discontinuity.
+    if np.min(quantized, initial=0) < -32768 or np.max(quantized, initial=0) > 32767:
+        raise ValueError('clipped audio after PCM16 quantization; review instead of wrapping')
+    return quantized.astype('<i2').tobytes()
+
+
+def write_pcm(path: Path, values: np.ndarray, rate: int) -> None:
+    encoded = encode_pcm16(values)
     with wave.open(str(path), 'wb') as output:
         output.setnchannels(1)
         output.setsampwidth(2)
         output.setframerate(rate)
-        output.writeframes(np.round(values * 32768).astype('<i2').tobytes())
+        output.writeframes(encoded)
     path.chmod(0o600)
 
 
@@ -79,8 +89,9 @@ def select_records(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         if row.get('quality_status') != 'accepted' or row.get('alignment_status') != 'aligned' or row.get('content_review') != 'approved':
             rejected.append({'id': identifier, 'reason': 'quality/alignment/content review not approved'})
             continue
-        if not row.get('source_master_sha256'):
-            raise ValueError(f'{identifier}: processed-master provenance missing')
+        for field in ('source_master_sha256', 'processed_master_sha256'):
+            if not isinstance(row.get(field), str) or not re.fullmatch(r'[0-9a-f]{64}', row[field]):
+                raise ValueError(f'{identifier}: processed-master provenance missing: {field}')
         text = unicodedata.normalize('NFC', row.get('spoken_text') or row.get('text', '')).strip()
         if not text or any(c in text for c in '\r\n\x00|'):
             raise ValueError(f'{identifier}: invalid reviewed transcript')

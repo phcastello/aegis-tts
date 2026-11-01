@@ -63,7 +63,7 @@ A comparação neural real permanece pendente; não há resultado inventado.
 
 `training.prepare_dataset` importa `processed/dataset.jsonl` do pipeline único
 Melodyne. Exige `quality_status=accepted`, `alignment_status=aligned`,
-`content_review=approved`, hash, duração e origem no master tratado. Pendências
+`content_review=approved`, hash, duração, `source_master_sha256` e `processed_master_sha256`. Pendências
 ficam no relatório; não entram no treino. O script preserva `group_id` e os
 splits decididos no corpus, mantém testes finais fora do trainer e reamostra
 explicitamente para 22.050 Hz. Não normaliza volume, não muda velocidade nem
@@ -153,7 +153,7 @@ continua responsável por filas limitadas, prioridade, request_id, SSE, WAV e
 ordem. O adaptador tem teto de texto/duração e nenhum estado acústico partilhado
 entre unidades. Seu método assíncrono implementa a assinatura atual `AudioAdapter`
 (`SpeechSegment`, evento de cancelamento → iterador PCM), com cálculo fora do
-event loop. A ligação em `SpeechService` permanece inativa até uma futura
+event loop e rejeição explícita de overflow no arredondamento PCM16. A ligação em `SpeechService` permanece inativa até uma futura
 implementação autorizada; nenhum endpoint novo é exigido do cliente.
 
 Perfil novo: `AegisVoicev2.0-PiperPTBR-pilot`; o perfil protegido atual não muda.
