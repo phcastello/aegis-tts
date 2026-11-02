@@ -102,6 +102,7 @@ def private_output(root,output):
 
 def collect(root):
     events=jsonl(root/'events.jsonl')
+    initial_validation=next((e['validation'] for e in events if e.get('event')=='initial_validation' and isinstance(e.get('validation'),dict)),None)
     updates=[e for e in events if e.get('event')=='update' and e.get('epoch',0)>0]
     history=load(root/'loss-history.json')
     if history is None:
@@ -115,7 +116,9 @@ def collect(root):
     aggregate=[]
     for (label,nfe),rows in sorted(grouped.items(),key=lambda x:str(x[0])):
         entry=dict(label=label,nfe=nfe,count=len(rows),cases=sorted(set(r.get('case','') for r in rows)))
-        for key in ('ttfa_ms','first_useful_pcm_available_ms','total_seconds','rtf','resident_allocated_mib','peak_allocated_mib','peak_reserved_mib'):
+        for key in ('ttfa_ms','first_pcm_ms','first_useful_pcm_available_ms','onset_audio_offset_ms',
+                    'estimated_first_audible_playback_ms','total_seconds','rtf','resident_allocated_mib',
+                    'peak_allocated_mib','peak_reserved_mib'):
             entry[key]=stats([r.get(key) for r in rows])
         aggregate.append(entry)
     checkpoints=load(root/'evaluations/checkpoint-manifest.json',[])
@@ -136,7 +139,7 @@ def collect(root):
         if not present:pending.append(name)
     result=dict(schema='aegisvoice.v2.training.report.v1',generated_utc=datetime.now(timezone.utc).isoformat(),
         private_root=str(root),dataset=load(root/'prepared/audit.json'),cpu_preflight=load(root/'cpu-check.json'),
-        training=training,best_checkpoint=best,loss_history=history,
+        training=training,best_checkpoint=best,initial_validation=initial_validation,loss_history=history,
         pipeline_stages=jsonl(root/'pipeline.jsonl'),
         training_update_statistics={k:stats([r.get(k) for r in updates]) for k in ('seconds','loss','gradient_norm','audio_seconds_per_second','peak_allocated_mib','peak_reserved_mib')},
         optimizer_updates_logged=len(updates),benchmark=[load(p) for p in sorted(root.glob('benchmark-*.json'))],
@@ -153,8 +156,8 @@ def collect(root):
         owner_perceptual_approval=False,pending=pending,
         interpretation={'loss':'fixed held-out validation estimates CFM objective, not perceptual identity',
             'asr':'auxiliary pronunciation/intelligibility indicator; not human approval',
-            'latency':'F5 complete utterance availability; block segmentation must be reported separately',
-            'qwen':'operational single-phrase baseline; use matched texts/configuration for controlled comparison'})
+            'latency':'F5 ttfa_ms/first_pcm_ms measure completed native waveform availability; estimated_first_audible_playback_ms adds digital activity offset assuming immediate FIFO playback, excluding client/device delay',
+            'qwen':'operational single-phrase HTTP baseline: first received block with any abs(PCM16)>32, not playback onset; F5 onset proxy instead requires two10ms frames with peak>100 and RMS>30; use matched measurement methods before direct comparison'})
     return result,updates,events
 
 
@@ -173,8 +176,12 @@ def plots(output,result,updates,events):
         axes[0].legend()
     else:axes[0].text(.5,.5,'Treinamento ainda sem atualizações registradas',ha='center',transform=axes[0].transAxes)
     axes[0].set(xlabel='Atualização do otimizador',ylabel='Loss de treino CFM')
-    if history:
-        axes[1].plot([r['epoch'] for r in history],[r['validation_loss'] for r in history],marker='o',markersize=3,label='Validação fixa')
+    validation_points=list(history)
+    initial=result.get('initial_validation') or {}
+    if finite(initial.get('loss')):
+        validation_points.insert(0,dict(epoch=0,validation_loss=initial['loss']))
+    if validation_points:
+        axes[1].plot([r['epoch'] for r in validation_points],[r['validation_loss'] for r in validation_points],marker='o',markersize=3,label='Validação fixa (época 0 = base)')
         valid=[r for r in history if finite(r.get('train_loss'))]
         if valid:axes[1].plot([r['epoch'] for r in valid],[r['train_loss'] for r in valid],marker='.',label='Média de treino')
         best=result.get('best_checkpoint') or {}

@@ -143,6 +143,18 @@ No hook NFE 16 da época seis, as disponibilidades de PCM completo foram
 0,491. São chamadas no processo de treino, com os estados do treinamento
 residentes; não incluem HTTP e não substituem os benchmarks finais isolados.
 
+Esses tempos registram a disponibilidade do buffer completo, antes da reprodução.
+Os proxies digitais encontram 430 ms e 390 ms de áudio antes do início da
+atividade, respectivamente. Com reprodução FIFO imediata, o primeiro início
+estimado seria **2,289 s** e **2,366 s**, excluindo dispositivo e cliente. O proxy
+F5 exige dois frames consecutivos de 10 ms com pico PCM16 superior a 100 e RMS
+superior a 30. O TTFA operacional Qwen mede a chegada do primeiro bloco HTTP
+com algum sample absoluto superior a 32; não é o instante de reprodução audível.
+Os métodos diferentes impedem declarar substituição direta ou vantagem de
+latência a partir desses números. O relatório mantém separadamente
+`ttfa_ms`, `first_pcm_ms`, `onset_audio_offset_ms` e
+`estimated_first_audible_playback_ms`, conservando os recibos individuais.
+
 O ASR CPU `faster-whisper-small`, int8, quatro threads, idioma português,
 beam cinco, temperatura zero e sem VAD transcreveu `novel_short` com a
 sequência “e um”, mas registrou `Joana` como `juana`: WER de 9,09%. No comando,
@@ -305,11 +317,13 @@ agregado conserva ausências como pendências, sem inventar métricas.
 Testes CPU desta preparação: dez casos do limite de extração em
 `tests/test_f5_preparation.py` passaram, incluindo caminhos maliciosos, symlinks,
 hash incorreto, destinos duplicados, CRC corrompido e permissões privadas.
-Quatro regressões adicionais em `tests/test_f5_report.py` passaram: soma das
+Cinco regressões adicionais em `tests/test_f5_report.py` passaram: soma das
 indisponibilidades de duas janelas, escolha da restauração mais recente e
 manutenção da pendência enquanto uma retomada está ativa; um manifesto acústico
 também não pode satisfazer a pendência do pacote auditivo. A estimativa YIN foi
 conferida com seno sintético de 150 Hz e silêncio (sem frames ativos).
+O teste de latência confirma que disponibilidade do buffer e reprodução
+estimada continuam separadas, sem alterar os recibos individuais.
 As avaliações CUDA
 finais, o tempo total de indisponibilidade, os checkpoints selecionados, as
 métricas finais e os commits serão registrados após a execução.

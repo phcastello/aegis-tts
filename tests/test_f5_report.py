@@ -69,3 +69,21 @@ def test_acoustics_manifest_cannot_satisfy_listening_package_completion(tmp_path
     assert 'listening_package' in report['pending']
     assert report['listening_manifests']==[]
     assert report['acoustics']=={'owner_perceptual_approval':False}
+
+
+def test_latency_aggregates_keep_native_availability_and_playback_proxy_separate(tmp_path):
+    directory=tmp_path/'evaluations/epoch-006'
+    rows=[dict(label='epoch-006',case='novel_short',nfe=16,ttfa_ms=1859,first_pcm_ms=1859,
+        first_useful_pcm_available_ms=1859,onset_audio_offset_ms=430,estimated_first_audible_playback_ms=2289),
+        dict(label='epoch-006',case='aegis_command',nfe=16,ttfa_ms=1976,first_pcm_ms=1976,
+        first_useful_pcm_available_ms=1976,onset_audio_offset_ms=390,estimated_first_audible_playback_ms=2366)]
+    write(directory,'results.json',rows)
+    original=(directory/'results.json').read_bytes()
+    (tmp_path/'events.jsonl').write_text(json.dumps(dict(event='initial_validation',validation=dict(loss=.784124)))+'\n')
+    report,_,_=collect(tmp_path)
+    aggregate=report['inference'][0]
+    assert aggregate['first_pcm_ms']['median']==1917.5
+    assert aggregate['onset_audio_offset_ms']['median']==410
+    assert aggregate['estimated_first_audible_playback_ms']['median']==2327.5
+    assert report['initial_validation']['loss']==.784124
+    assert (directory/'results.json').read_bytes()==original
