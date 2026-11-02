@@ -44,16 +44,16 @@ def vocos(device):
     v.load_state_dict(torch.load(OLD/'f5/vocos/pytorch_model.bin',map_location='cpu',weights_only=True), strict=True)
     return v.eval().to(device)
 
-def refs(root):
+def refs(root, target_seconds=6.0):
     rows=[json.loads(x) for x in (root/'prepared/train.jsonl').read_text().splitlines()]
     # Choose complete original clips, never crop to manufacture a short transcript.
-    return sorted(rows,key=lambda x:abs(x['duration']-6.0))[:3]
+    return sorted(rows,key=lambda x:abs(x['duration']-target_seconds))[:3]
 
 def reference(root, device):
     import soundfile as sf
     import torch
     from f5_tts.model.modules import MelSpec
-    r=refs(root)[0]
+    r=refs(root, target_seconds=10.0)[0]
     a,sr=sf.read(r['audio_filepath'],dtype='float32')
     assert sr==RATE and a.ndim==1
     mel=MelSpec(mel_spec_type='vocos')(torch.from_numpy(a)[None]).transpose(1,2).contiguous().to(device)
