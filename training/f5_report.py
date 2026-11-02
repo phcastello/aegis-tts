@@ -15,7 +15,6 @@ import math
 import os
 from pathlib import Path
 import statistics
-import time
 
 
 def sha256(path):
@@ -58,6 +57,39 @@ def duration(start,end):
     return (datetime.fromisoformat(end.replace('Z','+00:00'))-datetime.fromisoformat(start.replace('Z','+00:00'))).total_seconds()
 
 
+def operation_windows(root):
+    """Aggregate actual guarded outages; earlier restoration cannot close a resume."""
+    directories=[root/'operations',*sorted(root.glob('operations-resume-*'))]
+    windows=[]
+    for directory in directories:
+        if not directory.is_dir():continue
+        record=load(directory/'gpu-window.json',{})
+        # A prepared snapshot with no GPU window has not interrupted production.
+        if not record:continue
+        windows.append(dict(directory=str(directory),window=record,
+            baseline=load(directory/'baseline.json'),restored=load(directory/'restored.json'),
+            downtime_seconds=duration(record.get('stop_started_utc'),record.get('restored_utc')),
+            gpu_experiment_seconds=duration(record.get('stopped_utc'),record.get('gpu_work_ended_utc'))))
+    windows.sort(key=lambda item:(item['window'].get('stop_started_utc') or item['window'].get('started_utc') or '',item['directory']))
+    latest=windows[-1] if windows else {}
+    closed=[w for w in windows if w['downtime_seconds'] is not None]
+    complete=bool(windows) and len(closed)==len(windows)
+    verified=complete and all(w['window'].get('status')=='production_restored' and w['restored'] is not None for w in windows)
+    completed_downtime=sum(w['downtime_seconds'] for w in closed)
+    gpu_times=[w['gpu_experiment_seconds'] for w in windows if w['gpu_experiment_seconds'] is not None]
+    intermediate=[dict(directory=w['directory'],restored_utc=w['window'].get('restored_utc'),
+        downtime_seconds=w['downtime_seconds'],preceding_experiment_error=w['window'].get('error'),
+        description='Intermediate production restoration before a later guarded GPU window; not the final production state')
+        for w in windows[:-1] if w['restored'] is not None]
+    return dict(window=latest.get('window',{}),windows=windows,baseline=load(root/'operations/baseline.json'),
+        restored=latest.get('restored'),production_restoration_verified=verified,
+        downtime_seconds=completed_downtime if complete else None,
+        downtime_completed_windows_seconds=completed_downtime,
+        downtime_in_progress=bool(windows) and not complete,
+        gpu_experiment_seconds=sum(gpu_times) if windows and len(gpu_times)==len(windows) else None,
+        gpu_completed_windows_seconds=sum(gpu_times),intermediate_restorations=intermediate)
+
+
 def private_output(root,output):
     if output.is_symlink():raise ValueError('report output may not be a symlink')
     output=output.resolve()
@@ -87,9 +119,7 @@ def collect(root):
             entry[key]=stats([r.get(key) for r in rows])
         aggregate.append(entry)
     checkpoints=load(root/'evaluations/checkpoint-manifest.json',[])
-    baseline=load(root/'operations/baseline.json')
-    restored=load(root/'operations/restored.json')
-    window=load(root/'operations/gpu-window.json',{})
+    operation=operation_windows(root)
     training=load(root/'training-result.json')
     package_manifests=list(root.glob('**/manifest-sha256.json'))
     package_manifests=[p for p in package_manifests if 'report' not in p.parts]
@@ -97,10 +127,9 @@ def collect(root):
     pending=[]
     for name,present in [('training_result',training is not None),('final_cuda_evaluations',bool(checkpoints)),
                          ('all_gpu_phases_closed',(root/'gpu-all-phases-complete.json').is_file()),
-                         ('production_restoration_verified',restored is not None and window.get('status')=='production_restored'),
+                         ('production_restoration_verified',operation['production_restoration_verified']),
                          ('listening_package',bool(package_manifests)),('owner_perceptual_review',False)]:
         if not present:pending.append(name)
-    update_memory=[r.get('peak_allocated_mib') for r in updates]
     result=dict(schema='aegisvoice.v2.training.report.v1',generated_utc=datetime.now(timezone.utc).isoformat(),
         private_root=str(root),dataset=load(root/'prepared/audit.json'),cpu_preflight=load(root/'cpu-check.json'),
         training=training,best_checkpoint=best,loss_history=history,
@@ -110,9 +139,7 @@ def collect(root):
         inference=aggregate,checkpoint_manifest=checkpoints,
         heldout_test={p.parent.name:load(p) for p in sorted((root/'evaluations').glob('*/heldout-test.json'))},
         block_streaming=load(root/'evaluations/block-streaming.json'),asr=load(root/'asr/results.json'),
-        operation=dict(window=window,baseline=baseline,restored=restored,
-            downtime_seconds=duration(window.get('stop_started_utc'),window.get('restored_utc')),
-            gpu_experiment_seconds=duration(window.get('stopped_utc'),window.get('gpu_work_ended_utc'))),
+        operation=operation,
         listening_manifests=[dict(path=str(p),sha256=sha256(p)) for p in package_manifests],
         package_archives=[dict(path=str(p),bytes=p.stat().st_size,sha256=sha256(p)) for p in sorted(root.glob('*.zip'))],
         owner_perceptual_approval=False,pending=pending,
@@ -168,6 +195,8 @@ def generate(root,output,hash_checkpoints=True):
                   root/'prepared/audit.json',root/'cpu-check.json',root/'operations/baseline.json',root/'operations/restored.json',
                   root/'operations/gpu-window.json',root/'evaluations/checkpoint-manifest.json',root/'evaluations/block-streaming.json',root/'asr/results.json']
     source_paths.extend(root.glob('benchmark-*.json'))
+    for directory in [root/'operations',*sorted(root.glob('operations-resume-*'))]:
+        source_paths.extend(directory/name for name in ('baseline.json','restored.json','gpu-window.json'))
     source_paths.extend((root/'evaluations').glob('*/results.json'))
     source_paths.extend((root/'evaluations').glob('*/heldout-test.json'))
     if hash_checkpoints:source_paths.extend(p for p in (root/'checkpoints').glob('*') if p.suffix in ('.pt','.safetensors') and p.is_file())

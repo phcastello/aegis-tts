@@ -1,7 +1,8 @@
 # AegisVoice v2 — execução de fine-tuning em 02/11/2026
 
-Estado deste registro: preparação CPU concluída; resultados de treinamento,
-avaliação CUDA e restauração ainda serão incorporados a partir dos recibos.
+Estado deste registro: preparação CPU e piloto de três épocas concluídos;
+treinamento completo retomado após uma falha recuperável no hook de avaliação.
+Avaliações CUDA finais e restauração definitiva ainda estão pendentes.
 O proprietário autorizou a interrupção temporária do Qwen para **todas** as
 operações necessárias na GPU, sem prazo cronológico predefinido. A nova voz não
 será implantada automaticamente. Sua aprovação definitiva depende da escuta do
@@ -119,6 +120,40 @@ valor por três avaliações também pode encerrar o treino. NaN/Inf, gradientes
 não finitos, falta de espaço ou falhas CUDA são preservados como falhas técnicas,
 sem fabricar conclusão de treinamento. O teste final não decide esses ajustes.
 
+## Progresso confirmado e recuperação
+
+O piloto completou três épocas e **387 updates**, com promoção automática para
+a fase completa. A loss fixa de validação caiu de **0,784124** no checkpoint-base
+para **0,597315**, melhoria de aproximadamente **23,8%** no objetivo CFM.
+
+| Época | Updates acumulados | Loss média de treino | Loss de validação |
+| --- | ---: | ---: | ---: |
+| 1 | 129 | 0,767497 | 0,619051 |
+| 2 | 258 | 0,686593 | 0,603426 |
+| 3 | 387 | 0,667024 | 0,597315 |
+
+Às 11:52:15 UTC, o hook de síntese da terceira época falhou com
+`ModuleNotFoundError: No module named 'benchmarks.architecture_compare'`. Um
+pacote instalado chamado `benchmarks` ocultava os helpers locais. O checkpoint
+retomável já havia sido salvo no início da época quatro, update 387; os pesos,
+estado do otimizador e histórico foram preservados. A correção usa a carga
+explícita do helper local e passou na verificação CPU com o ambiente F5 real.
+
+O guardião executou seu rollback após o encerramento do subprocesso. Essa foi
+uma restauração intermediária indesejada: a primeira janela começou a parada
+às **11:08:45,992 UTC** e concluiu a restauração verificada às
+**11:55:17,327 UTC**, totalizando **46min31,334s** de indisponibilidade.
+O mesmo container foi novamente inspecionado e testado saudável, e a segunda
+janela começou às **11:57:06,433 UTC**, com recibos próprios em
+`operations-resume-01/`. O engine retomou automaticamente a época quatro,
+update 387, às 11:57:57 UTC; a fase completa continua, sem novo limite de tempo.
+
+Os recibos das duas janelas permanecem preservados. O relatório agrega as
+indisponibilidades efetivas, excluindo o intervalo em que a produção esteve
+restaurada. A restauração da primeira janela não é apresentada como estado final
+enquanto a janela retomada estiver ativa. A melhoria de loss ainda não comprova
+pronúncia, identidade robótica ou aprovação perceptiva da candidata.
+
 ## Operação e baseline anterior à interrupção
 
 O snapshot preserva o container original
@@ -133,10 +168,11 @@ amplitude absoluta superior a 32 chegou em 1,662 s; total de 2,685 s para
 3,730 s de áudio, RTF 0,720. A GPU registrava 10.674 MiB usados. É uma observação
 operacional de uma frase, sem percentis ou controle de carga fria.
 
-A janela GPU usa um único processo guardião para benchmark, treino e todas as
-avaliações CUDA. A restauração ocorre no `finally` depois do término desse
-processo; um watchdog sem prazo reage à perda do guardião. Não se restaura o
-Qwen entre treino, avaliação e inferência. Após a liberação da GPU, o rollback
+Cada janela GPU usa um processo guardião para treino e avaliações CUDA. A
+restauração ocorre no `finally` depois do término desse processo; um watchdog
+sem prazo reage à perda do guardião. A política da janela retomada mantém o
+Qwen desligado até a conclusão de todas as operações CUDA. A restauração
+intermediária provocada pela falha anterior está registrada acima. Após a liberação da GPU, o rollback
 confere identidade/configuração/referências e testa readiness, health, síntese
 WAV e PCM streaming. CPU ASR, curvas e empacotamento podem terminar com o Qwen
 já restaurado quando não demandam CUDA.
@@ -204,5 +240,8 @@ agregado conserva ausências como pendências, sem inventar métricas.
 Testes CPU desta preparação: dez casos do limite de extração em
 `tests/test_f5_preparation.py` passaram, incluindo caminhos maliciosos, symlinks,
 hash incorreto, destinos duplicados, CRC corrompido e permissões privadas.
-As verificações CUDA, o tempo de indisponibilidade, os checkpoints selecionados,
-as métricas finais e os commits serão registrados após a execução.
+Três regressões adicionais em `tests/test_f5_report.py` passaram: soma das
+indisponibilidades de duas janelas, escolha da restauração mais recente e
+manutenção da pendência enquanto uma retomada está ativa. As avaliações CUDA
+finais, o tempo total de indisponibilidade, os checkpoints selecionados, as
+métricas finais e os commits serão registrados após a execução.
