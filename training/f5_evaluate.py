@@ -103,15 +103,17 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1,target_wpm=None):
         for case in cases:
             for rep in range(repeats):
                 identifier=f"{case['id']}-nfe{nfe}-r{rep:02d}"
+                torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats();start=time.perf_counter()
                 tokens=convert_char_to_pinyin([ref_text+case['text'].lower()])
                 oov=sorted({c for c in tokens[0] if c not in model.vocab_char_map})
                 duration=duration_frames(frames,ref_text,case['text'].lower(),90)
                 if target_wpm is not None:
                     duration=word_rate_duration(frames,case['text'],target_wpm)
-                torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats();start=time.perf_counter()
+                frontend_seconds=time.perf_counter()-start
+                diffusion_started=time.perf_counter()
                 with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
                     generated,trajectory=model.sample(cond=cond,text=tokens,duration=duration,steps=nfe,cfg_strength=2.0,sway_sampling_coef=-1.0,seed=40733133+rep,use_epss=False)
-                torch.cuda.synchronize();diffusion=time.perf_counter()-start
+                torch.cuda.synchronize();diffusion=time.perf_counter()-diffusion_started
                 with torch.inference_mode():
                     wave=v.decode(generated[:,frames:,:].transpose(1,2).float())
                 torch.cuda.synchronize()
@@ -122,7 +124,7 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1,target_wpm=None):
                 row=dict(label=label,case=case['id'],text=case['text'],effective_text=case['text'].lower(),nfe=nfe,repetition=rep,seed=40733133+rep,oov_tokens=oov,cold_generation=first_for_model,first_in_evaluation=not records,reference_cache_hit=True,
                     cold_generation_scope='first synthesis for this model object; CUDA runtime may already be warm',
                     duration_policy='training-global word rate; exploratory neural duration control' if target_wpm else 'upstream UTF8 byte-ratio heuristic',target_wpm=target_wpm,
-                    diffusion_seconds=diffusion,total_seconds=elapsed,ttfa_ms=elapsed*1000,rtf=elapsed/(len(values)/RATE),
+                    frontend_seconds=frontend_seconds,diffusion_seconds=diffusion,total_seconds=elapsed,ttfa_ms=elapsed*1000,rtf=elapsed/(len(values)/RATE),
                     streaming='whole utterance; no PCM before complete ODE+Vocos',resident_allocated_mib=torch.cuda.memory_allocated()/2**20,
                     peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,
                     **save_audio(out/(identifier+'.wav'),values))
