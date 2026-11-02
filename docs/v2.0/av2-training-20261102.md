@@ -1,404 +1,371 @@
-# AegisVoice v2 — execução de fine-tuning em 02/11/2026
+# AegisVoice v2 — relatório final de fine-tuning em 02/11/2026
 
-Estado deste registro: preparação CPU, piloto de três épocas e vinte e duas épocas de
-treinamento concluídos; treinamento completo em andamento após a retomada de
-uma falha recuperável no hook de avaliação.
-Avaliações CUDA finais e restauração definitiva ainda estão pendentes.
-O proprietário autorizou a interrupção temporária do Qwen para **todas** as
-operações necessárias na GPU, sem prazo cronológico predefinido. A nova voz não
-será implantada automaticamente. Sua aprovação definitiva depende da escuta do
-proprietário.
+A rodada foi concluída: **29 épocas, 3.741 updates e todas as avaliações CUDA
+finalizadas**. O Qwen original foi integralmente restaurado e está saudável.
+A melhor candidata está preservada para avaliação auditiva; **a identidade,
+os efeitos robóticos e a voz definitiva ainda dependem da escuta do proprietário**.
+A candidata não foi implantada na Aegis.
 
-## Dataset definitivo
+## Dataset
 
-O ZIP `dataset_final_124_7ppm.zip` substitui o corpus anterior. Seu SHA-256 completo
-foi validado como
+Foi usado exclusivamente o novo `dataset_final_124_7ppm.zip`, substituindo o
+corpus anterior. O SHA-256 integral conferido foi
 `5bbd8288d9ab795a83ffd1599b0c5a32c00b401cb903b368a183d7ee7580c8df`.
-São 1.871.602.459 bytes comprimidos, 2.274 entradas e 2.063.227.270 bytes
-extraídos. Todas as entradas passaram na verificação CRC e na validação de
-caminhos; não foram aceitos traversal, caminhos absolutos, links, dispositivos,
-destinos duplicados ou arquivos criptografados.
+O ZIP tem 1.871.602.459 bytes; suas 2.274 entradas totalizam 2.063.227.270 bytes
+extraídos. Foram validados CRC, caminhos, duplicações e tipos de arquivo, com
+rejeição de traversal, caminhos absolutos, links e dispositivos.
 
-| Partição fixa | Falas | Duração preparada em segundos |
+| Partição preservada | Falas | Duração preparada, segundos |
 | --- | ---: | ---: |
 | Treino | 1.025 | 13.030,095583 |
 | Validação | 55 | 722,993542 |
 | Teste final | 50 | 546,257000 |
 | Total | 1.130 | 14.299,346125 |
 
-Os originais têm **14.299,334042 segundos**, aproximadamente 3h58min19s, mono,
-48 kHz, PCM24. Os 12,083 ms adicionais somados nos arquivos preparados decorrem
-do arredondamento para amostras inteiras ao reamostrar cada trecho para 24 kHz.
-Não há exemplo rejeitado ou em quarentena, sample em clipping ou token OOV na
-auditoria realizada. Os IDs de WAVs e textos, os três índices de partição e as
-duas colunas textuais do CSV coincidem exatamente com o manifesto. Grupos,
-áudio idêntico e texto normalizado não cruzam partições. Isso verifica a
-consistência documental; não equivale à escuta ou ao alinhamento independente
-palavra a palavra de todas as falas.
+Os originais são mono, 48 kHz, PCM24, com duração total de **3h58min19,334s**.
+A preparação para 24 kHz PCM24 adiciona apenas 12,083 ms somados, pelo
+arredondamento de cada trecho para amostras inteiras. Não houve fala rejeitada
+ou em quarentena, clipping de origem ou token OOV. IDs, hashes de todos os
+WAVs, transcrições `.txt`, CSV e índices foram conferidos. Grupos, áudio
+idêntico e texto normalizado não cruzam partições. A consistência documental
+não equivale à escuta palavra a palavra de todo o corpus.
 
-A conversão usa `scipy.signal.resample_poly`, janela Kaiser beta 10, mantendo
-PCM24. Não aplica ganho, efeitos, denoise, pitch, velocidade ou corte. O mel é
-o `MelSpec(vocos)` da revisão F5 fixada, calculado em CPU a partir do WAV de
-24 kHz efetivamente escrito: 100 canais, FFT/janela 1.024, hop 256, magnitude,
-escala HTK e log com piso `1e-5`. Os caches são `.npy` float32 `[100,T]` sem
-pickle. Os hashes de cada original, WAV convertido e mel foram reconferidos.
+A conversão usa `resample_poly`, Kaiser beta 10. Não reaplica efeitos, ganho,
+normalização, pitch, velocidade, denoise ou cortes. O cache usa o
+`MelSpec(vocos)` fixado: 100 mels, FFT/janela 1.024, hop 256, magnitude, HTK e
+log com piso `1e-5`, em `.npy` float32. Todos os hashes dos originais,
+convertidos e mels foram reconferidos. O texto recebe NFC, strip e minúsculas
+explícitas; `original_text` permanece preservado. O frontend é o
+`convert_char_to_pinyin` upstream. Os arquivos Arrow e as durações de treino,
+validação e teste ficam separados.
 
-O texto de treino recebe NFC, remoção dos espaços externos e minúsculas
-explicitamente, preservando `original_text`. O frontend é
-`convert_char_to_pinyin` upstream; não há phonemização PT-BR inventada ou
-substituição silenciosa do vocabulário. `raw.arrow` no nível superior contém
-somente treino; cada partição também tem seu próprio Arrow, durações e
-vocabulário em `prepared/splits/`.
+O proprietário aprovou perceptivamente o dataset tratado, com voz feminina
+sintética/robótica, menor expressividade e pitch ligeiramente reduzido. Relata
+ter recebido autorização por e-mail da ElevenLabs para o uso pessoal dos
+outputs transformados no treinamento da Aegis. A declaração foi registrada
+sem verificação independente e sem extrapolação para uso comercial ou outras
+finalidades. Permanece necessária a guarda privada da resposta original e dos
+cabeçalhos; a execução já estava expressamente autorizada pelo proprietário.
 
-O proprietário aprovou perceptivamente o corpus tratado: menos expressivo,
-pitch ligeiramente reduzido e textura feminina sintética/robótica. Relata ter
-recebido autorização por e-mail da ElevenLabs para o uso pessoal dos outputs
-transformados no treinamento da Aegis. Esta declaração está registrada no
-recibo privado, sem verificação independente do e-mail e sem extensão a uso
-comercial ou a outras finalidades. Permanece necessária a guarda privada da
-resposta original e dos cabeçalhos; isso não cria uma nova aprovação pendente
-para a execução já autorizada.
+## Arquitetura e configuração
 
-## Arquitetura e versões
+Foi usado **firstpixel/F5-TTS-pt-br, F5TTS_Base, com Vocos congelado**. A carga
+foi estrita, com 337.096.804 parâmetros: largura 1.024, 22 blocos, 16 heads,
+FF2, texto 512, quatro camadas convolucionais, `text_mask_padding=False` e
+`pe_attn_head=1`. Não foi usada a configuração semanticamente diferente v1.
+Qwen 0.6B/vLLM-Omni foi preservado como baseline e rollback; Piper e
+GPT-SoVITS não foram retomados.
 
-Usa-se `F5TTS_Base` PT-BR do firstpixel, com Vocos congelado, aproveitando o
-ambiente de `feat/v2-f5-magpie-evaluation`. A arquitetura tem 337.096.804
-parâmetros: largura 1.024, 22 blocos, 16 heads, FF2, texto 512, quatro camadas
-convolucionais, `text_mask_padding=False` e `pe_attn_head=1`. A carga é estrita.
-Não se troca pela configuração `F5TTS_v1_Base` apenas porque alguns shapes
-coincidem. As verificações anteriores e as licenças constam em
-[F5: evidência reproduzível](f5-evidence.md).
-
-| Artefato | Revisão / SHA-256 |
+| Artefato | Revisão ou SHA-256 |
 | --- | --- |
-| Código SWivid/F5-TTS | commit `45868abaabd74aabf03cd673d6dd00cc9d9c01ae` |
-| firstpixel/F5-TTS-pt-br | revisão `0af67bc061699cab46218c150948910fde209614` |
-| `model_last.safetensors` brasileiro | `c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f` |
+| Código SWivid/F5-TTS | `45868abaabd74aabf03cd673d6dd00cc9d9c01ae` |
+| firstpixel/F5-TTS-pt-br | `0af67bc061699cab46218c150948910fde209614` |
+| Checkpoint-base | `c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f` |
 | Vocabulário, 2.545 entradas | `2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c` |
-| Vocos | revisão `0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21` |
-| `pytorch_model.bin` Vocos | `97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a` |
-| `config.yaml` Vocos | `da9033922f969a47f0c160010226919e59f27761fd5066f3828d46de6650b0fc` |
+| Vocos | `0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21` |
+| Pesos Vocos | `97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a` |
+| Configuração Vocos | `da9033922f969a47f0c160010226919e59f27761fd5066f3828d46de6650b0fc` |
 
-O ambiente preparado permanece isolado em
-`/var/tmp/aegis-v2-evaluation-20261102/envs/f5/`: PyTorch/torchaudio
-2.6.0+cu118, NumPy 1.26.4, datasets 2.21.0 e pyarrow 17.0.0. O lock completo
-é [requirements-f5-cu118.lock.txt](../../benchmarks/architecture_compare/requirements-f5-cu118.lock.txt).
-A RTX A2000 apresenta 11.514 MiB utilizáveis; os 12 GB comerciais não são
-tratados como 12 GiB livres. O Qwen 0.6B/vLLM-Omni continua sendo o baseline e
-o rollback. Piper e GPT-SoVITS não integram esta execução.
+O ambiente isolado é `/var/tmp/aegis-v2-evaluation-20261102/envs/f5/`, com
+PyTorch/torchaudio 2.6.0+cu118. O
+[lock completo](../../benchmarks/architecture_compare/requirements-f5-cu118.lock.txt)
+e [as evidências de arquitetura/licença](f5-evidence.md) permanecem versionados.
+Os pesos brasileiros são CC BY-NC 4.0; as licenças permissivas do código e do
+Vocos não retiram essa restrição.
 
-## Preparação e configuração inicial de treinamento
+Configuração executada: microbatch de uma fala completa, acumulação oito,
+BF16 autocast, parâmetros e momentos AdamW FP32, activation checkpointing,
+LR inicial `1e-5`, warmup de 100 updates, decay inverso à raiz do contador,
+weight decay `0.01`, clipping de gradiente `1.0`, seed `20261102`, dois threads
+CPU e sem EMA durante o ajuste. A validação fixa usa as 55 falas com
+ruído, máscara, tempo e dropout reproduzíveis por item. O teste final não
+participou da seleção nem das decisões de parada.
 
-A preparação privada ocupa 1.576.001.536 bytes e a extração 2.070.208.512 bytes,
-fora o ZIP. O orçamento adicional é de 40 GB, contando também os ambientes e
-artefatos experimentais já presentes; o espaço real livre e a margem de
-rollback devem prevalecer. Checkpoints usam retenção limitada: melhor, piloto,
-intermediário e último, mais um estado completo retomável substituído de forma
-atômica. Não há retenção por época ilimitada.
+## Treinamento e seleção
 
-O engine usa diretamente a loss CFM da fonte fixada. Os defaults iniciais são
-microbatch de uma fala completa, acumulação oito, BF16 autocast, parâmetros e
-momentos AdamW FP32, activation checkpointing, learning rate `1e-5`, warmup de
-100 updates, weight decay `0.01`, clipping de gradiente em `1.0`, seed
-`20261102` e dois threads CPU. Vocos permanece congelado e não há EMA residente
-na GPU. Os defaults são uma hipótese inicial; os recibos registram os valores
-realmente executados e cada ajuste motivado por evidência.
+O piloto de três épocas foi promovido automaticamente após aprendizagem
+estável. O treino terminou às **17:33:13 UTC**, em **29 épocas**, **3.741 updates**
+e **29.725 microbatches**. A validação caiu de **0,784123678** para
+**0,572552035**, redução de **26,98%** no objetivo CFM.
 
-Antes do treino são medidos updates reais com forward, loss, backward,
-acumulação, optimizer step e validação, incluindo falas curtas, medianas e
-longas. O runner qualifica acumulação quatro e oito. A projeção de duração é
-informativa. Não existe deadline de treinamento, nem parada simplesmente ao
-atingir dez épocas.
-
-A validação usa as 55 falas fixas com os mesmos estados de máscara, ruído,
-tempo e dropout por item em cada avaliação. O piloto é promovido
-automaticamente após pelo menos três épocas quando há melhoria de validação
-superior a 0,5%. A falta dessa melhoria até seis épocas encerra o piloto. Na
-fase completa, depois de ao menos 12 épocas, seis avaliações sem melhoria
-relativa de 0,5% reduzem o learning rate uma vez pelo fator 0,3. Um novo platô
-encerra por convergência. Deterioração superior a 10% em relação ao melhor
-valor por três avaliações também pode encerrar o treino. NaN/Inf, gradientes
-não finitos, falta de espaço ou falhas CUDA são preservados como falhas técnicas,
-sem fabricar conclusão de treinamento. O teste final não decide esses ajustes.
-
-## Progresso confirmado e recuperação
-
-O piloto completou três épocas e **387 updates**, com promoção automática para
-a fase completa. A loss fixa de validação caiu de **0,784124** no checkpoint-base
-para **0,597315**, melhoria de aproximadamente **23,8%** no objetivo CFM.
-
-| Época | Updates acumulados | Loss média de treino | Loss de validação |
+| Marco | Updates | Loss média de treino | Loss de validação |
 | --- | ---: | ---: | ---: |
-| 1 | 129 | 0,767497 | 0,619051 |
-| 2 | 258 | 0,686593 | 0,603426 |
-| 3 | 387 | 0,667024 | 0,597315 |
-| 4 | 516 | 0,669986 | 0,593350 |
-| 5 | 645 | 0,657427 | 0,590924 |
-| 6 | 774 | 0,655744 | 0,587778 |
-| 7 | 903 | 0,651552 | 0,586404 |
-| 8 | 1.032 | 0,654430 | 0,584650 |
-| 9 | 1.161 | 0,654888 | 0,583988 |
-| 10 | 1.290 | 0,661020 | 0,582228 |
-| 11 | 1.419 | 0,647378 | 0,580772 |
-| 12 | 1.548 | 0,650571 | 0,579771 |
-| 16 | 2.064 | 0,640273 | 0,576533 |
-| 22 | 2.838 | 0,659611 | 0,573859 |
+| Base | 0 | — | 0,784124 |
+| Época 3 | 387 | 0,667024 | 0,597315 |
+| Época 6 | 774 | 0,655744 | 0,587778 |
+| Época 12 | 1.548 | 0,650571 | 0,579771 |
+| Época 22 | 2.838 | 0,659611 | 0,573859 |
+| Época 29 | 3.741 | 0,654057 | 0,572552 |
 
-A tabela mostra as épocas iniciais e marcos posteriores; `loss-history.json`
-e a curva privada conservam todas as avaliações. Na época **22**, foram
-concluídos **2.838 updates**, com validação **0,573859398**, melhoria de
-**26,82%** em relação à base. O learning rate recebeu a **única redução
-prevista, por fator 0,3**, após seis avaliações sem superar o ganho relativo
-de 0,5% desde a última melhoria relevante. A melhor loss absoluta ainda vinha
-caindo lentamente; isso não equivale a uma deterioração generalizada.
+O critério foi `validation_converged_after_plateau_and_single_lr_reduction`:
+após seis avaliações sem melhoria relativa de 0,5%, o LR recebeu a única
+redução prevista, por fator 0,3, na época 22. Uma melhoria relevante na época
+23 reiniciou a paciência; as seis avaliações seguintes não atingiram novo
+ganho relativo de 0,5%. Houve pequenos ganhos absolutos até o final, mas
+insuficientes segundo o critério definido. Não houve limite de horas nem
+encerramento por atingir dez épocas.
 
-A paciência foi reiniciada e a fase completa prossegue na época 23, observando
-a resposta à redução. O treinamento **ainda não terminou**: um novo platô
-persistente após essa redução poderá encerrar por convergência conforme a
-regra inicial. O valor baixo do learning rate, o número de épocas ou os
-indicadores auxiliares isolados não determinam o encerramento.
+O tempo efetivo nos updates foi **20.374,979 s — 5h39min34,979s**, incluindo
+forward, loss, backward, acumulação e optimizer step. Os dois subprocessos de
+treino somaram **22.629,770 s — 6h17min09,770s**, incluindo validações,
+checkpoints, cargas e hooks internos. Esses valores excluem o intervalo de
+restauração/retomada e a avaliação CUDA final. A série completa e os gráficos
+estão em `loss-history.json`, `report/loss.png` e
+`report/training-performance.png`, incluindo a base na época zero.
 
-Ao término da época doze, foram concluídos **1.548 updates**, com validação
-**0,579770833**, melhoria de **26,06%** em relação à base. O checkpoint
-intermediário dessa época foi preservado. A fase completa prosseguiu na época
-treze: a paciência estava em uma avaliação, sem redução do LR por platô. A
-época doze é o mínimo inicial para aplicar critérios de convergência, sem
-constituir uma meta de encerramento. Nenhuma busca extra de hiperparâmetros
-foi iniciada com base nesses dois áudios.
+O melhor checkpoint foi o da **época 29/update 3.741**, pela menor loss de
+validação fixa. Foram preservados:
 
-Na sexta época, foram concluídos 774 updates, com melhoria de 25,04%.
-No hook NFE 16 da época seis, as disponibilidades de PCM completo foram
-1,859 s para `novel_short` e 1,976 s para `aegis_command`, com RTF 0,454 e
-0,491. São chamadas no processo de treino, com os estados do treinamento
-residentes; não incluem HTTP e não substituem os benchmarks finais isolados.
+| Arquivo privado | Função / SHA-256 |
+| --- | --- |
+| `checkpoints/best.safetensors` | Melhor; `b3faf799babfcdf33768beb8dcc26f7f94c3c297b3b3a89549ab32cb9380fb44` |
+| `checkpoints/pilot.safetensors` | Época 3; `2f9cccce5cd1f728251e5676b0397f688f0b166ecd951914aebd0e7fed2b59bc` |
+| `checkpoints/intermediate.safetensors` | Época 12; `825e00412190c779a03ae2660ad10d40647bd34c5a911291ec3d5b8d2d7c5802` |
+| `checkpoints/last.safetensors` | Último; `f4a36513df48efb26803bbd26e3771a7b147c1c0aa5a4d310f115805233edd37` |
+| `checkpoints/last.pt` | Retomável; `c86af589edcedf2f0a58e174227b09e547ff7d60ced57beb23b18034f33e549f` |
 
-Esses tempos registram a disponibilidade do buffer completo, antes da reprodução.
-Os proxies digitais encontram 430 ms e 390 ms de áudio antes do início da
-atividade, respectivamente. Com reprodução FIFO imediata, o primeiro início
-estimado seria **2,289 s** e **2,366 s**, excluindo dispositivo e cliente. O proxy
-F5 exige dois frames consecutivos de 10 ms com pico PCM16 superior a 100 e RMS
-superior a 30. O TTFA operacional Qwen mede a chegada do primeiro bloco HTTP
-com algum sample absoluto superior a 32; não é o instante de reprodução audível.
-Os métodos diferentes impedem declarar substituição direta ou vantagem de
-latência a partir desses números. O relatório mantém separadamente
-`ttfa_ms`, `first_pcm_ms`, `onset_audio_offset_ms` e
-`estimated_first_audible_playback_ms`, conservando os recibos individuais.
+O estado retomável contém modelo, otimizador, scaler, RNG e progresso. Sua
+leitura CPU com `weights_only=True` passou em **389 verificações**, incluindo
+estados finitos do otimizador e contador 3.741. A retenção foi limitada, sem
+acumular um checkpoint completo por época.
 
-Na sexta época, o ASR CPU `faster-whisper-small`, int8, quatro threads, idioma português,
-beam cinco, temperatura zero e sem VAD transcreveu `novel_short` com a
-sequência “e um”, mas registrou `Joana` como `juana`: WER de 9,09%. No comando,
-registrou `Agis, confir no registro...`, WER de 33,33%. Esses dois áudios não
-são suficientes para concluir a qualidade da voz, a pronúncia de Aegis ou o
-comportamento de textos longos. A candidata continua sem aprovação auditiva.
+O pico de treino foi **6.037,436 MiB alocados / 6.244 MiB reservados pelo
+PyTorch**. Não houve OOM ou NaN/Inf reportado nos updates concluídos. Antes do
+treino, benchmarks reais qualificaram acumulação quatro e oito, com medianas
+de **2,792 s/update** e **5,459 s/update**, respectivamente, incluindo forward,
+backward e optimizer; ambas também executaram validação. A projeção inicial
+com acumulação oito foi aproximadamente 711,6 s/época, informativa e sem
+funcionar como prazo de operação.
 
-No checkpoint doze, os mesmos textos foram sintetizados com o prompt 0586,
-NFE 16, seed `40733133` e repetição zero, mantendo a comparação com as épocas
-três e seis. `novel_short` foi transcrito integralmente pelo ASR, WER de 0%; o
-comando preservou toda a sequência, com `Aegis` reconhecido como `Agis`, WER
-de 11,11%. A divergência `confir no` da época seis não apareceu nesse áudio.
+O problema recuperável foi um pacote instalado `benchmarks` ocultando os
+helpers locais no hook da época três. O guardião restaurou o Qwen antes do
+previsto. O conflito foi corrigido com carga explícita do helper local,
+testado no ambiente F5, e o treino retomou a época quatro/update 387 com o
+estado salvo. A restauração intermediária e a indisponibilidade das duas
+janelas foram preservadas no relatório.
 
-| Frase fixa | WER época 3 | WER época 6 | WER época 12 | WER época 22 |
-| --- | ---: | ---: | ---: | ---: |
-| `novel_short` | 18,18% | 9,09% | 0,00% | 0,00% |
-| `aegis_command` | 11,11% | 33,33% | 11,11% | 11,11% |
+## Qualidade e limitações
 
-Na época 22, a reexecução ASR canônica de quatro threads confirmou novamente
-essas duas transcrições: a primeira frase coincide integralmente; o comando
-continua com `Aegis` reconhecido como `Agis`. Foram reutilizados 15 registros
-anteriores e computados somente os dois novos. O resultado não resolve a
-pronúncia desejada do nome, que permanece para escuta do proprietário.
+As avaliações finais carregaram estritamente base, piloto, intermediário,
+melhor e último checkpoint. Foram concluídas **117 sínteses primárias**:
+base em dez casos × NFE 8/16/32; melhor em dez casos × três NFEs × duas seeds;
+e piloto/intermediário/último em três casos × três NFEs. Também foram avaliados
+blocos de sentenças e uma variante exploratória de duração. O pacote inclui
+frases inéditas PT-BR, fonética, pergunta, negação, datas, números, siglas,
+comando Aegis e texto longo, com comparações por frase e referências tratadas.
 
-O recibo suplementar da época doze usa o mesmo modelo/decodificação e dois
-threads CPU; a reexecução canônica com quatro threads confirmou WER de 0% e
-11,11%, reutilizando o cache das observações anteriores. Os recibos e
-configurações permanecem separados no relatório, sem agrupar WER de políticas
-diferentes. Essa comparação de duas frases não aprova a
-voz nem caracteriza comportamento em frases longas. A redução de WER não é
-usada isoladamente como critério de parada ou mudança de hiperparâmetros.
+O teste final de 50 falas, usado somente após a seleção, caiu de **0,841037470**
+na base para **0,667900618** no melhor checkpoint: redução de **20,59%**, com
+loss menor nos 50 pares. Isso confirma melhoria do objetivo acústico nessa
+partição, sem comprovar identidade vocal ou qualidade perceptiva.
 
-No hook da época doze, o buffer completo ficou disponível em 1,917 s e
-1,792 s, com RTF 0,468 e 0,446, respectivamente. Os inícios estimados de
-reprodução FIFO são 2,337 s e 2,182 s. Continuam medições no processo de treino,
-sem HTTP, com a mesma distinção de métodos descrita acima.
+O ASR canônico possui **151 registros**, todos com a mesma configuração:
+`faster-whisper-small` fixado, CPU int8, quatro threads, português, beam cinco,
+temperatura zero, sem VAD e sem condicionamento no texto anterior. O scorer
+aplica somente NFD, remoção de acentos, casefold e separação de pontuação;
+não usa normalização ou léxico do gateway. Recibos diagnósticos anteriores
+mantêm seus próprios parâmetros, sem combinar WER de políticas diferentes.
 
-A comparação ASR usa somente NFD, remoção de acentos, casefold e separação
-de pontuação/espaços. Não aplica o léxico ou o frontend da produção. Os
-parâmetros, o hash de configuração e o recibo dos pesos estão em
-`asr/settings.json`; o relatório agregado preserva também hashes dos scripts
-na coleta do relatório. Transcrições ASR e WER permanecem indicadores auxiliares.
+Na comparação NFE 16/seed zero das quatro frases comuns mais curtas, o WER
+agrupado por palavras passou de **9,62% para 3,85%**; a segunda seed do melhor
+teve **7,69%**. São quatro frases/52 palavras, sem conclusão estatística ampla.
+A melhora não foi uniforme em todos os casos e NFEs. O nome Aegis continuou
+aparecendo como `Agis` em transcrições; números, siglas, nomes e a leitura
+desejada ainda exigem escuta. Diferenças de formatação numérica também podem
+inflar WER.
 
-Às 11:52:15 UTC, o hook de síntese da terceira época falhou com
-`ModuleNotFoundError: No module named 'benchmarks.architecture_compare'`. Um
-pacote instalado chamado `benchmarks` ocultava os helpers locais. O checkpoint
-retomável já havia sido salvo no início da época quatro, update 387; os pesos,
-estado do otimizador e histórico foram preservados. A correção usa a carga
-explícita do helper local e passou na verificação CPU com o ambiente F5 real.
+**Texto longo sem segmentação tem uma limitação relevante.** O ASR sinalizou
+caudas alteradas/repetidas no melhor checkpoint em NFE 16/32 nas duas seeds,
+e em parte dos resultados NFE 8. A presença de energia no final do waveform
+não comprova as palavras efetivamente pronunciadas. Esses resultados não
+permitem declarar fala longa plenamente estável. Os áudios e diagnósticos
+foram preservados para escuta; ASR é um alerta auxiliar, não prova auditiva.
 
-O guardião executou seu rollback após o encerramento do subprocesso. Essa foi
-uma restauração intermediária indesejada: a primeira janela começou a parada
-às **11:08:45,992 UTC** e concluiu a restauração verificada às
-**11:55:17,327 UTC**, totalizando **46min31,334s** de indisponibilidade.
-O mesmo container foi novamente inspecionado e testado saudável, e a segunda
-janela começou às **11:57:06,433 UTC**, com recibos próprios em
-`operations-resume-01/`. O engine retomou automaticamente a época quatro,
-update 387, às 11:57:57 UTC; a fase completa continua, sem novo limite de tempo.
+A alternativa por sentenças produziu **três de três blocos com WER zero**,
+incluindo o final do terceiro. Os blocos ficaram disponíveis em
+**1,975 / 3,954 / 6,215 s**, para durações de **6,987 / 7,125 / 8,864 s**.
+O produtor permaneceu adiante da reprodução FIFO neste ensaio, sem underrun
+estimado. Os saltos nas duas junções foram 0,000664 e 0,000531. Isso apoia
+**segmentação por sentenças como requisito de integração**, com avaliação
+perceptiva das junções. Cada bloco ainda exige ODE e Vocos completos: não
+foi demonstrado streaming neural dentro do bloco nem servidor F5 via HTTP.
 
-Os recibos das duas janelas permanecem preservados. O relatório agrega as
-indisponibilidades efetivas, excluindo o intervalo em que a produção esteve
-restaurada. A restauração da primeira janela não é apresentada como estado final
-enquanto a janela retomada estiver ativa. A melhoria de loss ainda não comprova
-pronúncia, identidade robótica ou aprovação perceptiva da candidata.
+A única variante extra de duração, NFE 16 derivado de **124,60845 palavras/minuto**
+do treino, teve resultado misto/negativo: `novel_short` apresentou WER de
+**36,36%**, contra **9,09%** na regra principal nas duas seeds; o comando
+manteve 11,11% e a divergência do nome. A variante permanece como A/B
+exploratório e **não é a opção recomendada**. A regra upstream de duração e
+os NFEs 8/16/32 do benchmark principal foram preservados. Não houve efeito de
+velocidade, pitch ou processamento de waveform; o comprimento das palavras
+e a pontuação impedem tratar WPM diferente como erro automático de ritmo.
 
-## Acompanhamento acústico em CPU
+Os três roundtrips original tratado → 24 kHz → Vocos tiveram transcrições ASR
+sem divergências. Seus descritores mostraram mudanças pequenas de RMS e
+pitch estimado, mas não estabelecem preservação dos efeitos robóticos.
+`acoustics/results.json`, `f0.png` e `spectrum.png` acompanham F0 YIN, centroide,
+flatness, bandas e RMS em análise comum de 24 kHz. YIN usa máscara de energia,
+que não classifica vozeamento e pode errar em vozes sintéticas. Expressividade,
+textura feminina/robótica, fidelidade à identidade e continuidade percebida
+**não foram aprovadas por escuta humana nesta execução**.
 
-`training.f5_acoustics` acompanha `novel_short` e `aegis_command`, mantendo
-NFE 16, repetição zero e a seed registrada em cada recibo. Reutiliza RMS,
-centroide espectral, flatness e proporções de energia por banda existentes no
-projeto. Conserva as métricas na taxa nativa e também analisa todos os áudios
-em 24 kHz, com janela 1.024/hop 256, para controlar diferenças de banda e janela
-entre originais de 48 kHz e saídas de 24 kHz. Os WAVs permanecem intactos.
+Os WAVs FLOAT originais foram preservados, inclusive overshoot: o melhor
+checkpoint apresentou 49 samples fora de `[-1,1]` em dois áudios NFE 8;
+nenhum nos seus NFE 16/32. A base apresentou 1.271 samples fora da faixa em
+26 de 30 áudios. Isso é **overshoot medido no FLOAT**, sem clipping,
+normalização ou limiter aplicados para ocultá-lo. As cópias PCM16 para o
+navegador foram recusadas quando a conversão exigiria alteração de ganho ou
+clipping; os originais continuam disponíveis.
 
-A F0 é estimada por `librosa.yin`, faixa de 60 a 500 Hz. A máscara aceita frames
-com RMS acima do maior valor entre -55 dBFS e 30 dB abaixo do pico de RMS do
-arquivo. Essa máscara mede atividade energética; não é um classificador de
-vozeamento. Fricativas, efeitos sintéticos e erros de oitava podem produzir
-candidatos incorretos. São descritores auxiliares, sem critério de parada
-independente ou demonstração de identidade vocal.
+## Desempenho e integração
 
-Na primeira coleta, o prompt `aegis_ptbr_0586` apresentou mediana YIN de
-196,19 Hz tanto no original como no convertido. Na época três, as medianas
-foram 209,94 Hz para `novel_short` e 210,74 Hz para `aegis_command`. Os textos
-são diferentes do prompt; essas diferenças não isolam um efeito do treinamento.
-As comparações longitudinais posteriores mantêm texto, NFE, repetição e seed.
-Na época seis, essas mesmas frases apresentaram medianas YIN de 208,98 Hz e
-208,40 Hz, respectivamente: diferenças de -0,96 Hz e -2,33 Hz em relação à
-época três. São mudanças descritivas das amostras, sem comprovação de qualidade
-ou fidelidade da identidade.
-Na época doze, as medianas das mesmas frases foram 208,90 Hz e 208,55 Hz,
-respectivamente. Os gráficos foram atualizados com as três observações por
-frase, mantendo os descritores como auxiliares da escuta.
-Na época 22, foram 209,18 Hz e 209,46 Hz. O arquivo acústico agora acompanha
-quatro checkpoints representativos, sem atribuir aprovação vocal às diferenças.
+As sínteses usaram Euler, CFG `2.0`, sway `-1.0`, `use_epss=False` e
+BF16 autocast com parâmetros FP32. A referência completa de condicionamento
+foi `aegis_ptbr_0586`, com 10,103 s, pertencente ao treino. A matriz principal
+manteve a duração upstream pela razão de bytes UTF-8; o controle por palavras
+por minuto aparece em um grupo separado.
 
-Foi planejada uma única comparação final adicional: no melhor checkpoint,
-NFE 16 e duas frases fixas, derivar a duração da saída neural da média ponderada
-de **124,60845 palavras/minuto** do treino. O benchmark principal continua com
-a regra upstream baseada em bytes UTF-8 e NFE 8/16/32. O plano está em
-`tempo-comparison-plan.json` e não modifica waveform, velocidade por efeito,
-pitch ou demais efeitos. Palavras de comprimentos diferentes e pontuação
-alteram naturalmente a contagem por minuto; a variante não pressupõe erro de
-ritmo no treinamento nem inicia uma busca de combinações.
+Medições locais do melhor checkpoint, dez casos e duas seeds por NFE:
 
-Nos três roundtrips Vocos já disponíveis, a mediana YIN mudou de -3,93 a +0,55 Hz,
-o RMS de -0,42 a -0,05 dB e o centroide de -1,22 a +28,45 Hz na análise comum
-de 24 kHz. Isso registra alterações acústicas, sem substituir a escuta dos
-efeitos robóticos. A reconstrução Vocos do prompt 0586 não estava disponível;
-não foi gerada uma nova reconstrução para esta medição.
+| NFE | TTFA nativo / latência total mediana | RTF mediano | Pico PyTorch alocado |
+| --- | ---: | ---: | ---: |
+| 8 | 0,923 s | 0,148 | 2.154 MiB |
+| 16 | 1,826 s | 0,291 | 2.164 MiB |
+| 32 | 3,657 s | 0,584 | 2.183 MiB |
 
-Os resultados privados estão em `acoustics/results.json`, com hashes dos WAVs
-e dos caches de análise, além dos gráficos independentes `acoustics/f0.png` e
-`acoustics/spectrum.png`. O gerador do relatório incorpora esses resultados e
-mantém a necessidade de avaliação perceptiva do proprietário.
+O TTFA nativo é a disponibilidade do buffer completo, incluindo frontend,
+difusão e Vocos. Exclui HTTP e carga/preparo único do modelo e da referência.
+A carga do melhor levou 4,504 s; na carga havia aproximadamente 1.362 MiB
+alocados pelo PyTorch e 1.506 MiB totais no `nvidia-smi`. Para `novel_short`
+NFE 16, as duas observações levaram 1,644 e 1,626 s para 4,096 s de áudio.
+No texto longo de 23,147 s, levaram 4,107 e 4,128 s, com as ressalvas de
+qualidade da cauda descritas acima.
 
-## Operação e baseline anterior à interrupção
+O relatório separa `first_pcm_ms`, disponibilidade de PCM útil, offset de
+atividade e reprodução audível estimada. O proxy exige dois frames de 10 ms,
+pico PCM16 >100 e RMS >30, sob reprodução FIFO imediata, sem atraso de
+cliente/dispositivo. O Qwen também teve o onset recalculado offline com esse
+mesmo helper sobre o PCM e o cronograma real dos blocos, preservando o escopo
+HTTP/DSP da produção.
 
-O snapshot preserva o container original
-`08004c66f014e3e63fb6fd123946e4dbba2919ce29b4530848279917325faa75`, imagem
-`sha256:8aef74c67fe5238ce1e2b8781b9da3aedc73784014dd38bc1c1553f741fe93a0`,
-configuração, mounts e hashes das referências protegidas. O rollback inicia o
-mesmo container. Nenhum volume, imagem, cache ou checkpoint é apagado.
+Após o rollback, o Qwen apresentou TTFA HTTP operacional de **1,662 s**
+(primeiro bloco com algum sample absoluto >32), total **2,679 s**, **3,730 s**
+de áudio e **RTF 0,718**; a síntese WAV real levou **2,919 s**. A coorte fixa
+histórica de nove requisições WAV Qwen também está preservada no pacote.
+Os escopos, aquecimento e durações de áudio diferem; RTF local menor não
+comprova ganho equivalente de TTFA em produção.
 
-Em 02/11/2026 às 11:02 UTC, o Qwen estava saudável. Uma síntese WAV levou
-2,803 s. Na síntese PCM real, o primeiro bloco recebido com algum sample de
-amplitude absoluta superior a 32 chegou em 1,662 s; total de 2,685 s para
-3,730 s de áudio, RTF 0,720. A GPU registrava 10.674 MiB usados. É uma observação
-operacional de uma frase, sem percentis ou controle de carga fria.
+A candidata tem viabilidade técnica de memória e throughput na A2000, mas a
+integração exige segmentação por sentenças, validação do frontend PT-BR,
+controle de filas/entrega PCM e escuta de pronúncia, efeitos e junções.
+Nenhum endpoint foi substituído. NFE 16 constitui um ponto de comparação para
+a escuta; a escolha de voz e configuração definitiva cabe ao proprietário.
 
-Cada janela GPU usa um processo guardião para treino e avaliações CUDA. A
-restauração ocorre no `finally` depois do término desse processo; um watchdog
-sem prazo reage à perda do guardião. A política da janela retomada mantém o
-Qwen desligado até a conclusão de todas as operações CUDA. A restauração
-intermediária provocada pela falha anterior está registrada acima. Após a liberação da GPU, o rollback
-confere identidade/configuração/referências e testa readiness, health, síntese
-WAV e PCM streaming. CPU ASR, curvas e empacotamento podem terminar com o Qwen
-já restaurado quando não demandam CUDA.
+## Operação e recursos
 
-## Reprodução e artefatos privados
+Todas as operações CUDA terminaram em **02/11/2026 às 17:39:23,568 UTC**.
+O F5 foi descarregado antes de iniciar o mesmo container Qwen, cuja restauração
+com health/readiness, WAV real e PCM streaming foi concluída em
+**17:42:09,512 UTC**. A produção foi novamente verificada saudável após a
+finalização CPU. ID, imagem, configuração, mounts e 77 arquivos do bundle
+protegido coincidem com o snapshot original:
 
-Raiz privada: `/var/tmp/aegisvoice-v2-training-20261102/`. WAVs, transcrições,
-estados do otimizador, recibos operacionais completos e respostas de e-mail
-não devem ser adicionados ao Git.
+- Container: `08004c66f014e3e63fb6fd123946e4dbba2919ce29b4530848279917325faa75`.
+- Imagem: `sha256:8aef74c67fe5238ce1e2b8781b9da3aedc73784014dd38bc1c1553f741fe93a0`.
+- VRAM residente observada: **10.674 MiB**, igual ao baseline operacional.
+
+A indisponibilidade conservadora total foi **23.494,414 s — 6h31min34,414s**,
+somando início do comando de parada até verificação de restauração em cada
+janela. A primeira durou 46min31,334s e terminou no rollback recuperável de
+11:55:17 UTC. A segunda começou às 11:57:06 UTC e terminou às 17:42:09 UTC.
+O intervalo restaurado entre as duas foi excluído. Nenhum volume, imagem,
+checkpoint, cache ou referência de produção foi apagado.
+
+O inventário final, contando hardlinks uma única vez, registra
+**24.778.014.720 bytes** experimentais, incluindo ambientes anteriores, execução
+atual e ZIPs. O limite adicional de **40.000.000.000 bytes** foi respeitado;
+restaram **26.146.496.512 bytes livres**, acima da reserva operacional de
+**5 GiB**. O snapshot final é `report/resource-final.json`, posterior às
+cópias PCM16 e ao ZIP. Diretórios privados têm modo 0700, arquivos 0600 e
+scripts executáveis 0700. A nova voz não foi promovida à produção.
+
+## Entrega privada e reprodução
+
+Raiz dos resultados: `/var/tmp/aegisvoice-v2-training-20261102/`.
+O pacote para escuta é
+`/home/phc/aegisvoice-v2-finetuning-20261102.zip`, **132.077.331 bytes**, SHA-256:
+
+`1011041b409dff753d133f5fc816bc923230bfdfb97e2266c7cd34e6915ad077`
+
+O ZIP tem índice HTML offline, **163 WAVs nativos e 124 cópias PCM16**, com
+**287 entradas WAV** no manifesto. Trinta conversões foram recusadas para
+preservar a política sem ganho/clipping; os nativos FLOAT foram mantidos.
+Todas as entradas passaram no CRC; os alvos locais do HTML e os hashes dos
+WAVs nativos/cópias foram conferidos. Há áudio tratado, F5 antes do ajuste,
+checkpoints treinados e Qwen para os casos cujo baseline já existia. As cópias
+usam arredondamento para PCM16 sem efeitos, dither, resampling ou normalização.
+O índice agrupa comparações pela mesma frase e identifica proveniência.
+
+| Caminho na raiz privada | Conteúdo |
+| --- | --- |
+| `prepared/audit.json` | Auditoria integral do dataset e splits |
+| `prepared/owner-authorization.private.json` | Declaração do proprietário e escopo relatado |
+| `training-result.json`, `best.json`, `loss-history.json` | Treino, seleção e evolução |
+| `checkpoints/` | Pesos e estado retomável |
+| `evaluations/` | Sínteses, cargas, teste final e blocos |
+| `asr/results.json`, `asr/settings.json` | 151 observações canônicas e configuração |
+| `acoustics/` | Descritores e gráficos de F0/espectro |
+| `listening/index.html` | Comparação offline e cópias de compatibilidade |
+| `report/report.json` | Relatório final; única pendência: escuta do proprietário |
+| `report/final-gpu-analysis.json`, `report/final-quality-analysis.json` | Síntese das evidências finais |
+| `report/loss.png`, `report/training-performance.png` | Curvas de treino/validação e desempenho |
+| `report/operation-final-audit.json`, `report/resource-final.json` | Rollback e recursos |
+| `report/checkpoint-final-resume-audit.json` | 389 verificações do último estado retomável |
+| `report/package-verification.json` | CRC, links locais e SHA-256 do pacote |
+| `code-final/`, `code-provenance-final.json` | Cópias e hashes finais dos scripts |
+
+A preparação é reproduzível com `training.f5_prepare`; o carregamento CPU com
+`training.f5_engine --action check`. A execução CUDA usa
+`training.av2_ops run` envolvendo `training.f5_run`, após snapshot e checks.
+Esses comandos interrompem produção e exigem o contexto operacional apropriado;
+esta rodada já foi concluída. A sequência CPU executada depois da restauração
+está preservada em `run_cpu_finalize.sh` na raiz privada. Seus componentes são:
 
 ```bash
-# Preparação CPU com Qwen ativo.
-CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 \
-  /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_prepare \
-  --zip /home/phc/aegis-tts/dataset_final_124_7ppm.zip \
-  --root /var/tmp/aegisvoice-v2-training-20261102 \
-  --f5-source /var/tmp/aegis-v2-evaluation-20261102/f5/source \
-  --vocab /var/tmp/aegis-v2-evaluation-20261102/f5/vocab.hf.txt
-
 CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_engine --action check \
-  --run-root /var/tmp/aegisvoice-v2-training-20261102
-
+  -m training.f5_evaluate --action asr --run-root /var/tmp/aegisvoice-v2-training-20261102
 CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_evaluate --action roundtrip \
-  --run-root /var/tmp/aegisvoice-v2-training-20261102
-
-# Janela única; requer snapshot e verificações CPU concluídos.
-# Em reprodução usar uma nova raiz de operação, nunca sobrescrever o snapshot.
-python3 -m training.av2_ops \
-  --directory /var/tmp/aegisvoice-v2-training-20261102/operations \
-  snapshot
-python3 -m training.av2_ops \
-  --directory /var/tmp/aegisvoice-v2-training-20261102/operations \
-  verify
-python3 -m training.av2_ops \
-  --directory /var/tmp/aegisvoice-v2-training-20261102/operations \
-  run -- env OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 \
-  HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
-  WANDB_MODE=disabled PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-  /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_run --run-root /var/tmp/aegisvoice-v2-training-20261102
-
-# Após todas as operações CUDA e a restauração: ASR, pacote offline e curvas.
-CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 NUMBA_NUM_THREADS=2 \
-  /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_acoustics \
-  --run-root /var/tmp/aegisvoice-v2-training-20261102
+  -m training.f5_acoustics --run-root /var/tmp/aegisvoice-v2-training-20261102
 CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_evaluate --action asr \
-  --run-root /var/tmp/aegisvoice-v2-training-20261102
-CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_evaluate --action package \
-  --run-root /var/tmp/aegisvoice-v2-training-20261102
-CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
-  -m training.f5_report --run-root /var/tmp/aegisvoice-v2-training-20261102
+  -m training.f5_evaluate --action package --run-root /var/tmp/aegisvoice-v2-training-20261102
 ```
 
-Os recibos principais são `prepared/audit.json`, `cpu-check.json`,
-`roundtrip/results.json`, `benchmark-*.json`, `events.jsonl`, `loss-history.json`,
-`best.json`, `training-result.json`, `evaluations/checkpoint-manifest.json`,
-`evaluations/block-streaming.json`, `asr/results.json`,
-`operations/gpu-window.json`, `operations/restored.json` e `report/report.json`.
-As curvas são `report/loss.png` e `report/training-performance.png`. O pacote
-privado tem índice HTML offline e manifesto SHA-256 dos áudios. O relatório
-agregado conserva ausências como pendências, sem inventar métricas.
+O finalizador também executou o recálculo do proxy Qwen, a compatibilidade
+PCM16, a verificação do ZIP/HTML e `training.f5_report` com hashes completos.
+O script preservado contém os argumentos exatos e as asserções de GPU
+finalizada e Qwen restaurado. Os recibos opcionais do proxy e da compatibilidade
+estão presentes no relatório final, sem referências recursivas ao próprio JSON.
 
-Testes CPU desta preparação: dez casos do limite de extração em
-`tests/test_f5_preparation.py` passaram, incluindo caminhos maliciosos, symlinks,
-hash incorreto, destinos duplicados, CRC corrompido e permissões privadas.
-Seis regressões adicionais em `tests/test_f5_report.py` passaram: soma das
-indisponibilidades de duas janelas, escolha da restauração mais recente e
-manutenção da pendência enquanto uma retomada está ativa; um manifesto acústico
-também não pode satisfazer a pendência do pacote auditivo. A estimativa YIN foi
-conferida com seno sintético de 150 Hz e silêncio (sem frames ativos).
-O teste de latência confirma que disponibilidade do buffer e reprodução
-estimada continuam separadas, sem alterar os recibos individuais.
-Recibos opcionais do proxy Qwen e da reprodução no navegador permanecem
-ausentes até serem criados, sem fabricar resultados.
-As avaliações CUDA
-finais, o tempo total de indisponibilidade, os checkpoints selecionados, as
-métricas finais e os commits serão registrados após a execução.
+## Testes e commits
+
+Foram aprovados **51 testes CPU, zero falhas**: 45 testes via pytest do sistema
+e seis testes do engine no ambiente F5. Também passaram compilação de nove
+módulos, `git diff --check`, auditorias de snapshot/rollback, cargas estritas,
+minibatches CUDA reais, teste reservado, sínteses NFE 8/16/32, blocos FIFO,
+verificação retomável e validação integral do pacote. Comandos registrados em
+`report/cpu-tests-final.json`:
+
+```bash
+python3 -m pytest -q tests/test_av2_ops.py tests/test_f5_preparation.py \
+  tests/test_f5_probe.py tests/test_f5_evaluation.py tests/test_f5_report.py \
+  tests/test_f5_asr_metrics.py tests/test_f5_listening_compat.py
+/var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
+  -m unittest tests/test_f5_engine.py
+```
+
+O intervalo de implementação é `01f16f0..8c40a38`, com Conventional Commits.
+Entre os marcos: `453393e` (treino e guardião), `f245213` (autorização CUDA),
+`d419b50` (correção de importação/retomada), `e81ea75` (ASR sem normalizador do
+gateway), `912632d` (cópias PCM16), `de2b136` (frontend incluído na latência) e
+`8c40a38` (registro do platô/redução de LR). Hashes e cópias finais de código
+preservam a versão efetivamente entregue. Não há aprovação humana da nova voz
+implícita nos testes, nas métricas ou no pacote.
