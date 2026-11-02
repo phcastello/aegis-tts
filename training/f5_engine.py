@@ -163,8 +163,8 @@ def require_gpu_authorization(args, root):
     if not args.cuda_authorized or not (root / "gpu-window-authorized.json").is_file():
         raise ValueError("CUDA requires --cuda-authorized and private GPU window authorization receipt")
     auth = json.loads((root / "gpu-window-authorized.json").read_text())
-    if not (auth.get("owner_authorized") and auth.get("exclusive") and auth.get("status") == "active"):
-        raise ValueError("receipt must confirm owner_authorized/exclusive and status=active")
+    if not (auth.get("owner_authorized") and auth.get("exclusive_aegisvoice_v2_gpu") and auth.get("production_stopped") and auth.get("status") == "active"):
+        raise ValueError("receipt must confirm owner_authorized/exclusive_aegisvoice_v2_gpu/production_stopped and status=active")
     apps = subprocess.check_output(["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader,nounits"], text=True).strip().splitlines()
     if any(line.strip() and int(line.strip()) != os.getpid() for line in apps):
         raise RuntimeError("GPU has another compute process; refusing overlap")

@@ -59,3 +59,15 @@ def test_changed_configuration_refuses_before_stop(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='configuration changed'):
         ops.guarded(directory, 'http://127.0.0.1:8001', ['experiment'])
     docker_run.assert_not_called()
+
+
+def test_engine_accepts_actual_operations_authorization(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from training import f5_engine
+    (tmp_path / 'gpu-window-authorized.json').write_text(json.dumps({
+        'owner_authorized': True, 'production_stopped': True,
+        'exclusive_aegisvoice_v2_gpu': True, 'status': 'active',
+        'training_deadline': None}))
+    monkeypatch.setattr(f5_engine.subprocess, 'check_output', lambda *a, **kw: '')
+    f5_engine.require_gpu_authorization(SimpleNamespace(cuda_authorized=True),tmp_path)
