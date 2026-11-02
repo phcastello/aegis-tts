@@ -1,0 +1,7 @@
+{
+  "owner_approved": false,
+  "authorization_id": "REPLACE_WITH_OWNER_APPROVAL_REFERENCE",
+  "candidate": "qwen06-baseline-isolated",
+  "starts_utc": "2000-01-01T00:00:00Z",
+  "ends_utc": "2000-01-01T00:15:00Z"
+}

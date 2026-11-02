@@ -1,0 +1,31 @@
+{
+  "candidate": "voxcpm2-native",
+  "endpoint": "http://127.0.0.1:18083/v1/audio/speech",
+  "wire_format": "s16le-mono-raw",
+  "sample_rate": 48000,
+  "native_rate_confirmed": false,
+  "runtime_verified": false,
+  "runtime_revision": "cce58a5b59303c9bd63d12f23afe6a49a4a80c59",
+  "runtime_revision_note": "VoxCPM source commit. Also record local adapter SHA256, exact environment and flags in private provenance before marking verified.",
+  "weights": [
+    {"name": "openbmb/VoxCPM2@32279effe8c19989596f05d353d1447f51d9e915/model.safetensors", "sha256": "f7f964cfa9da23653baec6e6f7750719977ad944ed9f95fe52fe3a620506891d", "bytes": 4580080592},
+    {"name": "openbmb/VoxCPM2@32279effe8c19989596f05d353d1447f51d9e915/audiovae.pth", "sha256": "94b5d51e107e0507d4acc976cfdadb64edd6fd06d1f751dadbf2fd1594274bf1", "bytes": 376951122}
+  ],
+  "allowed_compute_pids": [],
+  "response_cache_disabled": false,
+  "text_field": "input",
+  "seed_field": "seed",
+  "seeds": [40733133, 40733134, 40733135],
+  "payload": {"stream": true, "response_format": "pcm"},
+  "request_timeout_seconds": 120,
+  "max_audio_seconds": 60,
+  "streaming_runtime_evidence": "Native generate_streaming -> autoregressive latent steps -> stateful causal AudioVAE chunks; inspect and smoke pinned runtime in approved window before marking verified.",
+  "reference_policy": "Authorized local synthetic reference in runtime CLI; record WAV and transcript hashes privately. Encoder16k/decoder48k must be evaluated for effect loss. No training.",
+  "blocking_gates": [
+    "Confirm disk budget for local exact source, weights, isolated environment and temporary/cache space before downloading",
+    "Verify dependencies against sm86 and existing driver535 without production changes",
+    "Approve exclusive operational window covering load, benchmark and production restoration margin",
+    "Measure actual A2000 load and generation memory, useful PCM latency, RTF, effects and PT-BR quality",
+    "Run actual native contract smoke before setting verified flags and isolated CUDA PID"
+  ]
+}

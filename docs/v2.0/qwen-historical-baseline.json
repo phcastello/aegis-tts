@@ -1,0 +1,381 @@
+{
+  "schema": "aegis.architecture_comparison.historical_baseline.v1",
+  "measured_date_utc": "2026-11-01",
+  "recomputed_from": "docs/v0.8.0/host-benchmark-20261101.json",
+  "source_sha256": "efeef7d50c75301850f4fc19a625d39e2d8478426ee2a061823a74f9e059647e",
+  "runtime_source_commit": "1749f5fb29320dced0a16add618989e36954ee7b",
+  "sample_rate": 24000,
+  "channels": 1,
+  "pcm_bits": 16,
+  "scope": "Qwen 0.6B + production gateway WORLD W04/P07/M02; not raw model",
+  "onset_definition": "historical single sample abs(PCM16)>100; digital proxy, not listening",
+  "limitations": [
+    "No new inference",
+    "No candidate architecture evaluated",
+    "Historical onset differs from the new windowed onset metric",
+    "Resident GPU snapshot is not peak per-request VRAM"
+  ],
+  "cohorts": {
+    "final-idle": {
+      "count": 9,
+      "metrics": {
+        "first_pcm_ms": {
+          "min": 1606.423581019044,
+          "median": 1652.7771539986134,
+          "max": 1726.1500381864607,
+          "mean": 1667.5436242690516
+        },
+        "first_voice_available_ms": {
+          "min": 1606.7711832001805,
+          "median": 1653.0776550062,
+          "max": 1726.1500381864607,
+          "mean": 1667.813858586467
+        },
+        "estimated_first_audible_playback_ms": {
+          "min": 1696.7569143523772,
+          "median": 1755.9417871534824,
+          "max": 1827.7909828486543,
+          "mean": 1762.9834390838664
+        },
+        "eof_ms": {
+          "min": 2425.592283718288,
+          "median": 2588.0007022060454,
+          "max": 6325.9158548898995,
+          "mean": 3745.1664111576974
+        },
+        "rtf_eof_over_audio": {
+          "min": 0.6435316230813733,
+          "median": 0.7795182837970016,
+          "max": 0.8168823680480813,
+          "mean": 0.7417537242789981
+        }
+      },
+      "rows": [
+        {
+          "sample": "time-01",
+          "case": "time",
+          "repetition": 1,
+          "first_pcm_ms": 1726.1500381864607,
+          "first_voice_available_ms": 1726.1500381864607,
+          "estimated_first_audible_playback_ms": 1811.6500381864607,
+          "eof_ms": 2475.1535751856863,
+          "audio_ms": 3030.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.8168823680480813
+        },
+        {
+          "sample": "math-01",
+          "case": "math",
+          "repetition": 1,
+          "first_pcm_ms": 1622.7014460600913,
+          "first_voice_available_ms": 1622.9801471345127,
+          "estimated_first_audible_playback_ms": 1718.0347793934245,
+          "eof_ms": 2588.0007022060454,
+          "audio_ms": 3320.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7795182837970016
+        },
+        {
+          "sample": "long-01",
+          "case": "long",
+          "repetition": 1,
+          "first_pcm_ms": 1660.0667871534824,
+          "first_voice_available_ms": 1660.323188174516,
+          "estimated_first_audible_playback_ms": 1755.9417871534824,
+          "eof_ms": 6325.9158548898995,
+          "audio_ms": 9830.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6435316230813733
+        },
+        {
+          "sample": "time-02",
+          "case": "time",
+          "repetition": 2,
+          "first_pcm_ms": 1651.8724537454545,
+          "first_voice_available_ms": 1652.1120546385646,
+          "estimated_first_audible_playback_ms": 1758.0391204121213,
+          "eof_ms": 2425.592283718288,
+          "audio_ms": 3100.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7824491237800929
+        },
+        {
+          "sample": "math-02",
+          "case": "math",
+          "repetition": 2,
+          "first_pcm_ms": 1606.423581019044,
+          "first_voice_available_ms": 1606.7711832001805,
+          "estimated_first_audible_playback_ms": 1696.7569143523772,
+          "eof_ms": 2469.32404814288,
+          "audio_ms": 3240.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7621370518959507
+        },
+        {
+          "sample": "long-02",
+          "case": "long",
+          "repetition": 2,
+          "first_pcm_ms": 1645.6430302932858,
+          "first_voice_available_ms": 1645.888531114906,
+          "estimated_first_audible_playback_ms": 1740.2680302932858,
+          "eof_ms": 6203.228481113911,
+          "audio_ms": 9489.291666666666,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6537082744441491
+        },
+        {
+          "sample": "time-03",
+          "case": "time",
+          "repetition": 3,
+          "first_pcm_ms": 1721.6243161819875,
+          "first_voice_available_ms": 1722.0272170379758,
+          "estimated_first_audible_playback_ms": 1827.7909828486543,
+          "eof_ms": 2430.36679783836,
+          "audio_ms": 3100.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7839892896252775
+        },
+        {
+          "sample": "math-03",
+          "case": "math",
+          "repetition": 3,
+          "first_pcm_ms": 1720.6338117830455,
+          "first_voice_available_ms": 1720.9947127848864,
+          "estimated_first_audible_playback_ms": 1810.9671451163788,
+          "eof_ms": 2594.580219127238,
+          "audio_ms": 3240.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.8007963639281598
+        },
+        {
+          "sample": "long-03",
+          "case": "long",
+          "repetition": 3,
+          "first_pcm_ms": 1652.7771539986134,
+          "first_voice_available_ms": 1653.0776550062,
+          "estimated_first_audible_playback_ms": 1747.4021539986134,
+          "eof_ms": 6194.335738196969,
+          "audio_ms": 9489.291666666666,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6527711399108963
+        }
+      ],
+      "weighted_rtf": 0.7045881243087107
+    },
+    "final-heldout": {
+      "count": 6,
+      "metrics": {
+        "first_pcm_ms": {
+          "min": 1629.7171637415886,
+          "median": 1693.076953990385,
+          "max": 1761.310463771224,
+          "mean": 1689.0191548348714
+        },
+        "first_voice_available_ms": {
+          "min": 1629.9629649147391,
+          "median": 1693.3601049240679,
+          "max": 1761.7649650201201,
+          "mean": 1689.2716391012073
+        },
+        "estimated_first_audible_playback_ms": {
+          "min": 1720.3635778725147,
+          "median": 1797.576953990385,
+          "max": 1853.8521304378908,
+          "mean": 1785.3663770570938
+        },
+        "eof_ms": {
+          "min": 2748.088293708861,
+          "median": 3101.8818793818355,
+          "max": 3571.572406217456,
+          "mean": 3158.5391457968703
+        },
+        "rtf_eof_over_audio": {
+          "min": 0.6688337839358531,
+          "median": 0.7019175544230487,
+          "max": 0.7815960341843928,
+          "mean": 0.7175525418308804
+        }
+      },
+      "rows": [
+        {
+          "sample": "negation-01",
+          "case": "negation",
+          "repetition": 1,
+          "first_pcm_ms": 1761.310463771224,
+          "first_voice_available_ms": 1761.7649650201201,
+          "estimated_first_audible_playback_ms": 1853.8521304378908,
+          "eof_ms": 2902.641681022942,
+          "audio_ms": 3782.2083333333335,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7674462708575304
+        },
+        {
+          "sample": "numbers-01",
+          "case": "numbers",
+          "repetition": 1,
+          "first_pcm_ms": 1702.3356398567557,
+          "first_voice_available_ms": 1702.6345408521593,
+          "estimated_first_audible_playback_ms": 1806.8356398567557,
+          "eof_ms": 3525.1687350682914,
+          "audio_ms": 4930.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7150443681680104
+        },
+        {
+          "sample": "consonants-01",
+          "case": "consonants",
+          "repetition": 1,
+          "first_pcm_ms": 1629.7171637415886,
+          "first_voice_available_ms": 1629.9629649147391,
+          "estimated_first_audible_playback_ms": 1727.3421637415886,
+          "eof_ms": 2748.088293708861,
+          "audio_ms": 4020.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6836040531614082
+        },
+        {
+          "sample": "negation-02",
+          "case": "negation",
+          "repetition": 2,
+          "first_pcm_ms": 1722.9448156431317,
+          "first_voice_available_ms": 1723.1931169517338,
+          "estimated_first_audible_playback_ms": 1815.4864823097985,
+          "eof_ms": 3173.0844997800887,
+          "audio_ms": 4059.75,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.7815960341843928
+        },
+        {
+          "sample": "numbers-02",
+          "case": "numbers",
+          "repetition": 2,
+          "first_pcm_ms": 1683.8182681240141,
+          "first_voice_available_ms": 1684.0856689959764,
+          "estimated_first_audible_playback_ms": 1788.3182681240141,
+          "eof_ms": 3571.572406217456,
+          "audio_ms": 5340.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6688337839358531
+        },
+        {
+          "sample": "consonants-02",
+          "case": "consonants",
+          "repetition": 2,
+          "first_pcm_ms": 1633.9885778725147,
+          "first_voice_available_ms": 1633.9885778725147,
+          "estimated_first_audible_playback_ms": 1720.3635778725147,
+          "eof_ms": 3030.6792589835823,
+          "audio_ms": 4400.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6887907406780869
+        }
+      ],
+      "weighted_rtf": 0.7142795355204483
+    },
+    "final-reserved": {
+      "count": 4,
+      "metrics": {
+        "first_pcm_ms": {
+          "min": 1669.3131090141833,
+          "median": 1673.7056754063815,
+          "max": 1683.768766000867,
+          "mean": 1675.1233064569533
+        },
+        "first_voice_available_ms": {
+          "min": 1669.6034101769328,
+          "median": 1673.8584763370454,
+          "max": 1684.309468138963,
+          "mean": 1675.4074577474967
+        },
+        "estimated_first_audible_playback_ms": {
+          "min": 1761.3225963401298,
+          "median": 1768.3050984100748,
+          "max": 1785.8104326675336,
+          "mean": 1770.9358064569533
+        },
+        "eof_ms": {
+          "min": 3053.876345977187,
+          "median": 4804.399959510192,
+          "max": 6731.118435040116,
+          "mean": 4848.448675009422
+        },
+        "rtf_eof_over_audio": {
+          "min": 0.5999214291479604,
+          "median": 0.6523400287066616,
+          "max": 0.6921019727269192,
+          "mean": 0.6491758648220507
+        }
+      },
+      "rows": [
+        {
+          "sample": "reserved_short-01",
+          "case": "reserved_short",
+          "repetition": 1,
+          "first_pcm_ms": 1683.768766000867,
+          "first_voice_available_ms": 1684.309468138963,
+          "estimated_first_audible_playback_ms": 1785.8104326675336,
+          "eof_ms": 3053.876345977187,
+          "audio_ms": 4420.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6909222502210831
+        },
+        {
+          "sample": "reserved_long-01",
+          "case": "reserved_long",
+          "repetition": 1,
+          "first_pcm_ms": 1674.655929673463,
+          "first_voice_available_ms": 1674.655929673463,
+          "estimated_first_audible_playback_ms": 1761.3225963401298,
+          "eof_ms": 6487.420022021979,
+          "audio_ms": 10570.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6137578071922403
+        },
+        {
+          "sample": "reserved_short-02",
+          "case": "reserved_short",
+          "repetition": 2,
+          "first_pcm_ms": 1669.3131090141833,
+          "first_voice_available_ms": 1669.6034101769328,
+          "estimated_first_audible_playback_ms": 1771.2714423475165,
+          "eof_ms": 3121.3798969984055,
+          "audio_ms": 4510.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.6921019727269192
+        },
+        {
+          "sample": "reserved_long-02",
+          "case": "reserved_long",
+          "repetition": 2,
+          "first_pcm_ms": 1672.7554211392999,
+          "first_voice_available_ms": 1673.0610230006278,
+          "estimated_first_audible_playback_ms": 1765.3387544726331,
+          "eof_ms": 6731.118435040116,
+          "audio_ms": 11220.0,
+          "immediate_playback_underruns": 0,
+          "immediate_playback_underrun_ms": 0.0,
+          "rtf_eof_over_audio": 0.5999214291479604
+        }
+      ],
+      "weighted_rtf": 0.6313084212251852
+    }
+  }
+}

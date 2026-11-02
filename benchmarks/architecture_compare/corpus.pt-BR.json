@@ -1,0 +1,11 @@
+[
+  {"id": "novel_short", "text": "A gaveta azul contém três chaves e um bilhete de Joana.", "input_mode": "verbatim", "purpose": "frase inédita; consoantes e identidade"},
+  {"id": "novel_question", "text": "Você prefere que eu confira o registro agora ou depois do almoço?", "input_mode": "verbatim", "purpose": "interrogação neutra; prosódia"},
+  {"id": "numbers_raw", "text": "O saldo é R$ 1.247,83, dividido em 6 parcelas; a taxa caiu de 12,5% para 9,75%.", "input_mode": "verbatim", "purpose": "normalização real de moeda, números e percentuais"},
+  {"id": "numbers_spoken", "text": "O saldo é de mil duzentos e quarenta e sete reais e oitenta e três centavos, dividido em seis parcelas; a taxa caiu de doze vírgula cinco por cento para nove vírgula setenta e cinco por cento.", "input_mode": "approved_spoken", "purpose": "separar frontend numérico da geração acústica"},
+  {"id": "dates_units", "text": "A revisão será em 18/12/2026, às 07h35; mantenha 32 kHz, 48 kHz e 3,2 centímetros de margem.", "input_mode": "verbatim", "purpose": "datas, hora, unidades e símbolos"},
+  {"id": "acronyms", "text": "A CPU consultou a API, o SUS confirmou o CPF, e a URL usa HTTPS.", "input_mode": "verbatim", "purpose": "siglas pronunciadas como palavras e letras; intenção depende da aplicação"},
+  {"id": "br_phonetics", "text": "Amanhã, Júlia encontrará João em São Luís; depois, seguirá para Recife, Curitiba e Belo Horizonte.", "input_mode": "verbatim", "purpose": "nasalização, encontros, nomes e localidades brasileiras"},
+  {"id": "negation_tail", "text": "Não apague o arquivo. Primeiro verifique a última linha, depois confirme: está tudo correto?", "input_mode": "verbatim", "purpose": "negativas, omissões, primeira consoante e cauda"},
+  {"id": "long_stability", "text": "Antes de encerrar a revisão, compare os três relatórios e confira o nome de cada responsável. Se houver uma diferença no segundo documento, preserve a versão anterior e registre a correção. Ao terminar, aguarde a confirmação de Mariana, porque o envio final deve ocorrer somente depois da conferência completa.", "input_mode": "verbatim", "purpose": "duração, repetição, continuidade e estabilidade de memória"}
+]

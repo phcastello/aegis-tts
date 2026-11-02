@@ -1,0 +1,76 @@
+{
+  "candidate": "gptsovits-v2pro-ptbr-experimental",
+  "endpoint": "http://127.0.0.1:19882/tts",
+  "wire_format": "s16le-mono-raw",
+  "sample_rate": 32000,
+  "native_rate_confirmed": false,
+  "runtime_verified": false,
+  "runtime_revision": "04a44eb977586645f33594b72af13a035a2056c6",
+  "runtime_revision_note": "Inspected upstream only. Compatible pt-BR frontend source, revision, symbol mapping and license are unresolved. Replace runtime_revision with the actual pinned combined runtime before enabling execution.",
+  "weights": [
+    {
+      "name": "MatheusMarquesEiras/gpt-sovits-ptbr-base@ba75b17c00876e6ab5324251f7d34a099ca8bf3c/gpt/ptbr_base-e20.ckpt",
+      "sha256": "4f5094799d2d6169ebb1b6b6cb806d1c7a06399e8ad263a42cb72c98c61332b2",
+      "bytes": 155403680,
+      "hash_status": "remote LFS metadata; local file not downloaded or verified"
+    },
+    {
+      "name": "MatheusMarquesEiras/gpt-sovits-ptbr-base@ba75b17c00876e6ab5324251f7d34a099ca8bf3c/sovits/ptbr_base_e6_s3210.pth",
+      "sha256": "1a05d5584d4434d2d639b8cd716eafb7e62b03f2d8e00561c27551a65518f08e",
+      "bytes": 134980339,
+      "hash_status": "remote LFS metadata; local file not downloaded or verified"
+    },
+    {
+      "name": "lj1995/GPT-SoVITS@8f8857563c040d542de108a2c18b0425abd6c9c5/chinese-hubert-base/pytorch_model.bin",
+      "sha256": "24164f129c66499d1346e2aa55f183250c223161ec2770c0da3d3b08cf432d3c",
+      "bytes": 188811417,
+      "hash_status": "remote LFS metadata; local file not downloaded or verified"
+    },
+    {
+      "name": "lj1995/GPT-SoVITS@8f8857563c040d542de108a2c18b0425abd6c9c5/chinese-roberta-wwm-ext-large/pytorch_model.bin",
+      "sha256": "e53a693acc59ace251d143d068096ae0d7b79e4b1b503fa84c9dcf576448c1d8",
+      "bytes": 651225145,
+      "hash_status": "remote LFS metadata; local file not downloaded or verified"
+    },
+    {
+      "name": "lj1995/GPT-SoVITS@8f8857563c040d542de108a2c18b0425abd6c9c5/sv/pretrained_eres2netv2w24s4ep4.ckpt",
+      "sha256": "4f5a0bf73c61eb41b174e1bb54e7ee3c83233892be8e0af1f187024e8e581a35",
+      "bytes": 107528697,
+      "hash_status": "remote LFS metadata; local file not downloaded or verified"
+    }
+  ],
+  "allowed_compute_pids": [],
+  "response_cache_disabled": false,
+  "text_field": "text",
+  "seed_field": "seed",
+  "seeds": [40733133, 40733134, 40733135],
+  "payload": {
+    "text_lang": "UNRESOLVED_FRONTEND_LANGUAGE_KEY",
+    "ref_audio_path": "/PRIVATE/REPLACE_WITH_AUTHORIZED_SYNTHETIC_REFERENCE.wav",
+    "prompt_text": "REPLACE_WITH_EXACT_AUTHORIZED_REFERENCE_TRANSCRIPT",
+    "prompt_lang": "UNRESOLVED_FRONTEND_LANGUAGE_KEY",
+    "text_split_method": "cut0",
+    "batch_size": 1,
+    "split_bucket": false,
+    "media_type": "raw",
+    "streaming_mode": 2,
+    "parallel_infer": false,
+    "fragment_interval": 0.0,
+    "speed_factor": 1.0,
+    "gpt_streaming": false,
+    "overlap_length": 2,
+    "min_chunk_length": 16
+  },
+  "request_timeout_seconds": 120,
+  "max_audio_seconds": 90,
+  "streaming_runtime_evidence": "Upstream api_v2 integer streaming_mode=2 routes through AR infer_panel_naive(streaming_mode=True) and SoVITS decode_streaming before EOS. Mode1/true returns completed text fragments. New gpt_streaming=true rejects v2Pro at inspected revision. No runtime validation with custom pt-BR frontend yet.",
+  "reference_policy": "Authorized local synthetic effect-bearing reference only. Fill path and exact transcript privately, record source and reference/transcript hashes. No old/new corpus training. Never commit private reference fields.",
+  "blocking_gates": [
+    "Obtain exact licensed pt-BR frontend code and pin a reproducible combined runtime revision; do not invent the symbol ID ordering or language key",
+    "Verify all local file SHA256 values and necessary tokenizer/config assets against immutable source metadata",
+    "Verify loaded PT-BR checkpoint config and actual PCM output sample rate and byte order",
+    "Confirm isolated CUDA environment supports sm86 and the existing host driver without production changes",
+    "Owner-approved exclusive GPU window and isolated runtime CUDA PIDs are required before any inference",
+    "Validate batch1 streaming and EOF with held-out text and explicitly verify caching is disabled"
+  ]
+}

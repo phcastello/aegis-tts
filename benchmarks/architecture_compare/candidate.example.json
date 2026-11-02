@@ -1,0 +1,20 @@
+{
+  "candidate": "qwen06-baseline-isolated",
+  "endpoint": "http://127.0.0.1:18001/v1/audio/speech",
+  "wire_format": "s16le-mono-raw",
+  "sample_rate": 24000,
+  "native_rate_confirmed": false,
+  "runtime_verified": false,
+  "runtime_revision": "REPLACE_WITH_IMMUTABLE_COMMIT_OR_IMAGE_DIGEST",
+  "weights": [{"name": "Qwen3-TTS-12Hz-0.6B-Base and codec", "sha256": "REPLACE_WITH_ACTUAL_WEIGHT_HASHES"}],
+  "allowed_compute_pids": [],
+  "response_cache_disabled": false,
+  "text_field": "input",
+  "seed_field": null,
+  "seeds": [40733133, 40733134, 40733135],
+  "payload": {"stream": true, "response_format": "pcm"},
+  "request_timeout_seconds": 120,
+  "max_audio_seconds": 90,
+  "streaming_runtime_evidence": "PENDING: inspect exact runtime; multiple HTTP chunks alone do not prove incremental decoding",
+  "reference_policy": "local authorized synthetic reference; include reference hash and transcript hash in private provenance; no old/new corpus training"
+}

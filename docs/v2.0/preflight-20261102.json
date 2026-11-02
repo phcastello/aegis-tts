@@ -1,0 +1,58 @@
+{
+  "schema": "aegis.architecture_comparison.preflight.v1",
+  "observed_utc": "2026-11-02T01:24:26.549152+00:00",
+  "operations": [
+    "read-only host, Docker metadata and health/ready GET",
+    "No model load or synthesis",
+    "No weights or package downloads"
+  ],
+  "git": {
+    "branch": "perf/v0.8.0-host-first-audio",
+    "head": "0465472a3f5e8073ad45450e0616297fc5ac6906",
+    "remote_main": "2564fc71563d758844666e7bf0bb4954dc1e59d6",
+    "initial_worktree_changes": "7 pre-existing dataset file deletions; preserved",
+    "agents_md": "none in checkout or ancestor directories"
+  },
+  "gpu": {
+    "query": "NVIDIA RTX A2000 12GB, 11514, 10674, 601, 535.309.01",
+    "compute_processes": "2635736, VLLM::StageEngineCoreProc_noid_replica0_DP0, 4838\n2636141, VLLM::StageEngineCoreProc_noid_replica0_DP0, 5828",
+    "note": "Resident snapshot includes production; not per-model peak"
+  },
+  "disk_bytes": {
+    "total": 130664861696,
+    "used": 106779856896,
+    "free": 17880629248
+  },
+  "production": {
+    "name": "aegis-tts",
+    "image": "aegis-tts-gateway:latency-1749f5f",
+    "image_id": "sha256:8aef74c67fe5238ce1e2b8781b9da3aedc73784014dd38bc1c1553f741fe93a0",
+    "source_revision": "1749f5fb29320dced0a16add618989e36954ee7b",
+    "status": "running",
+    "health": "healthy",
+    "restart_count": 0,
+    "http": {
+      "health": 200,
+      "ready": 200
+    },
+    "ports": {
+      "8001/tcp": [
+        {
+          "HostIp": "0.0.0.0",
+          "HostPort": "8001"
+        }
+      ]
+    },
+    "effective_env": {
+      "AEGIS_TTS_INITIAL_SEGMENT": "stable",
+      "AEGIS_TTS_INITIAL_CODEC_FRAMES": "22",
+      "AEGIS_TTS_CODEC_BATCH_FRAMES": "22",
+      "AEGIS_TTS_ONSET_TRIM": "conservative-v1",
+      "AEGIS_TTS_STREAM_STARTUP_MS": "320",
+      "AEGIS_TTS_PROFILE_LATENCY": "0"
+    }
+  },
+  "candidate_gpu_window": "not authorized for this comparison",
+  "new_training_executed": false,
+  "new_candidate_inference_executed": false
+}
