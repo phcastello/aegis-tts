@@ -268,6 +268,10 @@ def execute(args):
                     "peak_reserved_mib": torch.cuda.max_memory_reserved() / 2**20,
                     "snapshot": gpu_snapshot()}
             result["warmup_policy"] = "optional separate warmup retained; first synthesis labeled cold_generation; no discarded calls"
+            # A deadline watchdog exits immediately to release CUDA. Persist
+            # load/reference evidence before synthesis so partial windows keep
+            # these measurements alongside each completed attempt receipt.
+            write_private(output / "load.json", json_bytes(result))
             ref_text = normalize_text(transcript, args.text_mode)
             if len(ref_text[-1].encode()) == 1:
                 ref_text += " "
