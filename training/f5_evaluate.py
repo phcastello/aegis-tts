@@ -307,11 +307,27 @@ def package(root):
     texts={c['id']:c['text'] for c in corpora()}
     if conditioning:
         texts.update({'A-conditioning-original':conditioning['original_text'],'B-conditioning-24000':conditioning['original_text']})
-    body=['<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>AegisVoice v2 — avaliação privada</title><style>body{font:16px system-ui;max-width:1000px;margin:2em auto}article{padding:1em;border-bottom:1px solid #bbb}audio{width:100%}code{font-size:11px}</style><h1>AegisVoice v2 — comparação privada</h1><p>Candidatas experimentais. A voz definitiva depende da escuta do proprietário. Sem efeitos reaplicados. F5 usa frases completas; blocos não demonstram streaming neural.</p>']
-    for path,sha in rows:
+    body=['<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>AegisVoice v2 — avaliação privada</title><style>body{font:16px system-ui;max-width:1000px;margin:2em auto}article{padding:1em;border:1px solid #ddd}.compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}audio{width:100%}code{font-size:11px;word-break:break-all}</style><h1>AegisVoice v2 — comparação privada</h1><p>Candidatas experimentais. A voz definitiva depende da escuta do proprietário. Sem efeitos reaplicados. F5 usa frases completas; blocos não demonstram streaming neural.</p>']
+    def group(path):
+        rel=Path(path)
+        if rel.parts[0]=='reference':return '01 — Referência de condicionamento'
+        if rel.parts[0]=='roundtrip':return '02 — Original / conversão / Vocos — '+rel.parent.name
+        return '03 — '+rel.stem.split('-nfe')[0]
+    def ordering(item):
+        path=item[0];rel=Path(path)
+        priority=0 if '-nfe16-' in path or rel.parts[0]=='qwen' else 1
+        return group(path),priority,path
+    previous=None
+    for path,sha in sorted(rows,key=ordering):
+        current=group(path)
+        if current!=previous:
+            if previous is not None:body.append('</div>')
+            body.append(f'<h2>{html.escape(current)}</h2><div class="compare">')
+            previous=current
         case=Path(path).stem.split('-nfe')[0]
         phrase=texts.get(case,'')
         body.append(f'<article><p>{html.escape(path)}</p><p>{html.escape(phrase)}</p><audio controls preload="none" src="{html.escape(path,quote=True)}"></audio><code>SHA-256 {sha}</code></article>')
+    if previous is not None:body.append('</div>')
     body.append('</html>');(dest/'index.html').write_text('\n'.join(body));write_json(dest/'manifest-sha256.json',dict(rows))
     print(json.dumps({'listening':str(dest),'audio_files':len(rows)}))
 
