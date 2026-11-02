@@ -99,7 +99,7 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1):
                 torch.cuda.synchronize()
                 values=wave[0].float().cpu().numpy()
                 elapsed=time.perf_counter()-start
-                row=dict(label=label,case=case['id'],text=case['text'],effective_text=case['text'].lower(),nfe=nfe,repetition=rep,seed=40733133+rep,oov_tokens=oov,
+                row=dict(label=label,case=case['id'],text=case['text'],effective_text=case['text'].lower(),nfe=nfe,repetition=rep,seed=40733133+rep,oov_tokens=oov,cold_generation=not records,reference_cache_hit=True,
                     diffusion_seconds=diffusion,total_seconds=elapsed,ttfa_ms=elapsed*1000,rtf=elapsed/(len(values)/RATE),
                     streaming='whole utterance; no PCM before complete ODE+Vocos',resident_allocated_mib=torch.cuda.memory_allocated()/2**20,
                     peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,
@@ -180,7 +180,8 @@ def final(root):
     for label,p in paths:
         torch.cuda.reset_peak_memory_stats();load_started=time.perf_counter()
         model=load_model(p);v=vocos('cuda');torch.cuda.synchronize()
-        load_evidence=dict(seconds=time.perf_counter()-load_started,resident_allocated_mib=torch.cuda.memory_allocated()/2**20,peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,strict_load=True,dtype='FP32 parameters; BF16 autocast')
+        from benchmarks.architecture_compare.benchmark import gpu_snapshot
+        load_evidence=dict(driver_snapshot=gpu_snapshot(),seconds=time.perf_counter()-load_started,resident_allocated_mib=torch.cuda.memory_allocated()/2**20,peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,strict_load=True,dtype='FP32 parameters; BF16 autocast')
         write_json(root/'evaluations'/label/'load.json',load_evidence)
         cases=corpora() if label in ('base','best') else [corpora()[0],corpora()[6],corpora()[-1]]
         rows=synthesize(model,v,root,label,cases,[8,16,32],repeats=2 if label=='best' else 1)
