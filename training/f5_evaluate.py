@@ -276,11 +276,21 @@ def package(root):
         q=dest/'qwen'/p.name;q.parent.mkdir(exist_ok=True)
         if not q.exists():os.link(p,q)
         rows.append((str(q.relative_to(dest)),digest(p)))
+    conditioning=None
+    if (root/'prepared/train.jsonl').exists():
+        conditioning=refs(root,target_seconds=10.0)[0]
+        for name,key in [('A-conditioning-original.wav','source_audio_filepath'),('B-conditioning-24000.wav','audio_filepath')]:
+            source=Path(conditioning[key]);q=dest/'reference'/name;q.parent.mkdir(exist_ok=True)
+            if not q.exists():os.link(source,q)
+            rows.append((str(q.relative_to(dest)),digest(source)))
     metadata={'dataset_zip_sha256':'5bbd8288d9ab795a83ffd1599b0c5a32c00b401cb903b368a183d7ee7580c8df','source_commit':'45868abaabd74aabf03cd673d6dd00cc9d9c01ae','base_revision':'0af67bc061699cab46218c150948910fde209614','base_sha256':'c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f','vocab_sha256':'2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c','vocos_sha256':'97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a','owner_perceptual_approval':False}
+    if conditioning:metadata['conditioning_reference']=conditioning
     for name,source in [('checkpoints',root/'evaluations/checkpoint-manifest.json'),('training',root/'training-result.json'),('asr',root/'asr/results.json')]:
         if source.exists():metadata[name]=json.loads(source.read_text())
     write_json(dest/'experiment.json',metadata)
     texts={c['id']:c['text'] for c in corpora()}
+    if conditioning:
+        texts.update({'A-conditioning-original':conditioning['original_text'],'B-conditioning-24000':conditioning['original_text']})
     body=['<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>AegisVoice v2 — avaliação privada</title><style>body{font:16px system-ui;max-width:1000px;margin:2em auto}article{padding:1em;border-bottom:1px solid #bbb}audio{width:100%}code{font-size:11px}</style><h1>AegisVoice v2 — comparação privada</h1><p>Candidatas experimentais. A voz definitiva depende da escuta do proprietário. Sem efeitos reaplicados. F5 usa frases completas; blocos não demonstram streaming neural.</p>']
     for path,sha in rows:
         case=Path(path).stem.split('-nfe')[0]
