@@ -1,7 +1,8 @@
 # AegisVoice v2 — execução de fine-tuning em 02/11/2026
 
-Estado deste registro: preparação CPU e piloto de três épocas concluídos;
-treinamento completo retomado após uma falha recuperável no hook de avaliação.
+Estado deste registro: preparação CPU, piloto de três épocas e seis épocas de
+treinamento concluídos; treinamento completo em andamento após a retomada de
+uma falha recuperável no hook de avaliação.
 Avaliações CUDA finais e restauração definitiva ainda estão pendentes.
 O proprietário autorizou a interrupção temporária do Qwen para **todas** as
 operações necessárias na GPU, sem prazo cronológico predefinido. A nova voz não
@@ -131,6 +132,29 @@ para **0,597315**, melhoria de aproximadamente **23,8%** no objetivo CFM.
 | 1 | 129 | 0,767497 | 0,619051 |
 | 2 | 258 | 0,686593 | 0,603426 |
 | 3 | 387 | 0,667024 | 0,597315 |
+| 4 | 516 | 0,669986 | 0,593350 |
+| 5 | 645 | 0,657427 | 0,590924 |
+| 6 | 774 | 0,655744 | 0,587778 |
+
+Até a sexta época, foram concluídos **774 updates**, com melhoria de
+**25,04%** na validação em relação à base. O treinamento completo continua.
+No hook NFE 16 da época seis, as disponibilidades de PCM completo foram
+1,859 s para `novel_short` e 1,976 s para `aegis_command`, com RTF 0,454 e
+0,491. São chamadas no processo de treino, com os estados do treinamento
+residentes; não incluem HTTP e não substituem os benchmarks finais isolados.
+
+O ASR CPU `faster-whisper-small`, int8, quatro threads, idioma português,
+beam cinco, temperatura zero e sem VAD transcreveu `novel_short` com a
+sequência “e um”, mas registrou `Joana` como `juana`: WER de 9,09%. No comando,
+registrou `Agis, confir no registro...`, WER de 33,33%. Esses dois áudios não
+são suficientes para concluir a qualidade da voz, a pronúncia de Aegis ou o
+comportamento de textos longos. A candidata continua sem aprovação auditiva.
+
+A comparação ASR usa somente NFD, remoção de acentos, casefold e separação
+de pontuação/espaços. Não aplica o léxico ou o frontend da produção. Os
+parâmetros, o hash de configuração e o recibo dos pesos estão em
+`asr/settings.json`; o relatório agregado preserva também hashes dos scripts
+na coleta do relatório. Transcrições ASR e WER permanecem indicadores auxiliares.
 
 Às 11:52:15 UTC, o hook de síntese da terceira época falhou com
 `ModuleNotFoundError: No module named 'benchmarks.architecture_compare'`. Um
@@ -175,6 +199,10 @@ Na primeira coleta, o prompt `aegis_ptbr_0586` apresentou mediana YIN de
 foram 209,94 Hz para `novel_short` e 210,74 Hz para `aegis_command`. Os textos
 são diferentes do prompt; essas diferenças não isolam um efeito do treinamento.
 As comparações longitudinais posteriores mantêm texto, NFE, repetição e seed.
+Na época seis, essas mesmas frases apresentaram medianas YIN de 208,98 Hz e
+208,40 Hz, respectivamente: diferenças de -0,96 Hz e -2,33 Hz em relação à
+época três. São mudanças descritivas das amostras, sem comprovação de qualidade
+ou fidelidade da identidade.
 
 Nos três roundtrips Vocos já disponíveis, a mediana YIN mudou de -3,93 a +0,55 Hz,
 o RMS de -0,42 a -0,05 dB e o centroide de -1,22 a +28,45 Hz na análise comum

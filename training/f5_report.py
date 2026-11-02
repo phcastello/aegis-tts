@@ -123,6 +123,11 @@ def collect(root):
     training=load(root/'training-result.json')
     package_manifests=list((root/'listening').glob('manifest-sha256.json'))
     best=load(root/'best.json')
+    repository=Path(__file__).resolve().parents[1]
+    code_paths=[*sorted((repository/'training').glob('f5_*.py')),
+        repository/'training/av2_ops.py',repository/'training/reconstruct.py',
+        repository/'training/prepare_dataset.py',repository/'benchmarks/architecture_compare/benchmark.py',
+        repository/'benchmarks/architecture_compare/f5_probe.py']
     pending=[]
     for name,present in [('training_result',training is not None),('final_cuda_evaluations',bool(checkpoints)),
                          ('all_gpu_phases_closed',(root/'gpu-all-phases-complete.json').is_file()),
@@ -138,6 +143,9 @@ def collect(root):
         inference=aggregate,checkpoint_manifest=checkpoints,
         heldout_test={p.parent.name:load(p) for p in sorted((root/'evaluations').glob('*/heldout-test.json'))},
         block_streaming=load(root/'evaluations/block-streaming.json'),asr=load(root/'asr/results.json'),
+        asr_settings=load(root/'asr/settings.json'),
+        code_provenance_scope='repository script contents at report generation; per-ASR audio/settings hashes remain in ASR records',
+        code_provenance=[dict(path=str(p.relative_to(repository)),sha256=sha256(p)) for p in code_paths if p.is_file()],
         acoustics=load(root/'acoustics/results.json'),
         operation=operation,
         listening_manifests=[dict(path=str(p),sha256=sha256(p)) for p in package_manifests],
@@ -194,7 +202,7 @@ def generate(root,output,hash_checkpoints=True):
     source_paths=[root/'events.jsonl',root/'pipeline.jsonl',root/'loss-history.json',root/'training-result.json',root/'best.json',
                   root/'prepared/audit.json',root/'cpu-check.json',root/'operations/baseline.json',root/'operations/restored.json',
                   root/'operations/gpu-window.json',root/'evaluations/checkpoint-manifest.json',root/'evaluations/block-streaming.json',root/'asr/results.json']
-    source_paths.append(root/'acoustics/results.json')
+    source_paths.extend([root/'acoustics/results.json',root/'asr/settings.json'])
     source_paths.extend(root.glob('benchmark-*.json'))
     for directory in [root/'operations',*sorted(root.glob('operations-resume-*'))]:
         source_paths.extend(directory/name for name in ('baseline.json','restored.json','gpu-window.json'))
