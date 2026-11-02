@@ -17,6 +17,9 @@ OLD = Path('/var/tmp/aegis-v2-evaluation-20261102')
 SOURCE = OLD / 'f5/source'
 BASE = OLD / 'f5/model_last.safetensors'
 RATE, HOP = 24000, 256
+# Use the repository's exact standalone benchmark modules. The F5 environment
+# has an unrelated regular package named 'benchmarks' that shadows namespaces.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'benchmarks/architecture_compare'))
 
 def digest(path):
     h=hashlib.sha256()
@@ -76,8 +79,8 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1):
     import torch
     import numpy as np
     from f5_tts.model.utils import convert_char_to_pinyin
-    from benchmarks.architecture_compare.f5_probe import duration_frames
-    from benchmarks.architecture_compare.benchmark import pcm_metrics
+    from f5_probe import duration_frames
+    from benchmark import pcm_metrics
     dev=next(model.parameters()).device
     r,cond,frames=reference(root,dev)
     ref_text=r['text'].strip()+' '
@@ -154,7 +157,7 @@ def load_model(path):
     from f5_tts.model import CFM,DiT
     from f5_tts.model.utils import get_tokenizer
     from safetensors.torch import load_file
-    from benchmarks.architecture_compare.f5_probe import ARCH
+    from f5_probe import ARCH
     mapping,size=get_tokenizer(str(OLD/'f5/vocab.hf.txt'),'custom')
     model=CFM(transformer=DiT(**{**ARCH,'checkpoint_activations':False},text_num_embeds=size,mel_dim=100),mel_spec_kwargs={'mel_spec_type':'vocos'},odeint_kwargs={'method':'euler'},vocab_char_map=mapping)
     model.load_state_dict(load_file(str(path)),strict=True)
@@ -180,7 +183,7 @@ def final(root):
     for label,p in paths:
         torch.cuda.reset_peak_memory_stats();load_started=time.perf_counter()
         model=load_model(p);v=vocos('cuda');torch.cuda.synchronize()
-        from benchmarks.architecture_compare.benchmark import gpu_snapshot
+        from benchmark import gpu_snapshot
         load_evidence=dict(driver_snapshot=gpu_snapshot(),seconds=time.perf_counter()-load_started,resident_allocated_mib=torch.cuda.memory_allocated()/2**20,peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,strict_load=True,dtype='FP32 parameters; BF16 autocast')
         write_json(root/'evaluations'/label/'load.json',load_evidence)
         cases=corpora() if label in ('base','best') else [corpora()[0],corpora()[6],corpora()[-1]]
@@ -288,6 +291,12 @@ def package(root):
 
 def main():
     os.umask(0o077)
-    p=argparse.ArgumentParser();p.add_argument('--run-root',type=Path,default=ROOT);p.add_argument('--action',choices=['roundtrip','final','asr','package'],required=True)
-    args=p.parse_args();{'roundtrip':roundtrip,'final':final,'asr':asr,'package':package}[args.action](args.run_root)
+    p=argparse.ArgumentParser();p.add_argument('--run-root',type=Path,default=ROOT);p.add_argument('--action',choices=['roundtrip','final','checkpoint','asr','package'],required=True)
+    p.add_argument('--checkpoint',type=Path);p.add_argument('--label',default='pilot-recovered')
+    args=p.parse_args()
+    if args.action=='checkpoint':
+        bootstrap();auth=json.loads((args.run_root/'gpu-window-authorized.json').read_text())
+        if not (auth.get('status')=='active' and auth.get('production_stopped')):raise ValueError('active exclusive GPU window required')
+        model=load_model(args.checkpoint);quick_synthesis(model,args.run_root,args.label)
+    else:{'roundtrip':roundtrip,'final':final,'asr':asr,'package':package}[args.action](args.run_root)
 if __name__=='__main__':main()
