@@ -220,13 +220,18 @@ def main():
                         help='optional JSON mapping of real master/manifest paths and expected hashes')
     parser.add_argument('--split-plan', type=Path,
                         help='explicit SHA256-bound collection group plan; final test and original validation stay fixed')
+    parser.add_argument('--architecture', choices=['legacy-piper', 'f5', 'magpie'], default='legacy-piper',
+                        help='collection conversion/export target; never starts training')
     args = parser.parse_args()
     os.umask(0o077)
     if args.input_schema == 'aegis.audio_collection.v1':
         from .audio_collection import prepare_collection
         report = prepare_collection(args.manifest, args.output,
-                                    args.dataset_root or args.manifest.parent, args.provenance, args.split_plan)
+                                    args.dataset_root or args.manifest.parent, args.provenance, args.split_plan,
+                                    architecture=args.architecture)
     else:
+        if args.architecture != 'legacy-piper':
+            parser.error('F5/Magpie export requires aegis.audio_collection.v1 original clips')
         if args.dataset_root or args.provenance or args.split_plan:
             parser.error('dataset-root/provenance/split-plan apply only to aegis.audio_collection.v1')
         report = prepare(args.manifest, args.output)

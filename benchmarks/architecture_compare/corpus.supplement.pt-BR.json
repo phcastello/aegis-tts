@@ -1,0 +1,8 @@
+[
+  {
+    "id": "aegis_command",
+    "text": "Aegis, confirme o registro e aguarde o próximo comando.",
+    "input_mode": "verbatim",
+    "purpose": "supplement: name Aegis and neutral command; not part of original nine-case cohort"
+  }
+]

@@ -370,3 +370,51 @@ def test_split_plan_rejects_incomplete_unbound_or_leaking_changes(tmp_path, chan
     with pytest.raises(ValueError, match=reason):
         prepare_collection(manifest, tmp_path / 'prepared', root, split_plan=plan_path)
     assert not (tmp_path / 'prepared').exists()
+
+
+@pytest.mark.parametrize('architecture,rate', [('f5', 24000), ('magpie', 22050)])
+def test_architecture_export_preserves_raw_transcripts_groups_and_originals(tmp_path, architecture, rate):
+    root, rows = fixture_dataset(tmp_path)
+    rows[0]['text'] = '  Amanhã, Júlia chegará às 07h35.  '
+    manifest = root / 'dataset.jsonl'
+    manifest.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    original_hashes = [sha256(root / row['audio_path']) for row in rows]
+    output = tmp_path / 'exported'
+    report = prepare_collection(manifest, output, root, architecture=architecture)
+    assert report['status'] == 'prepared-pending-review'
+    assert report['architecture_manifest_status'] == 'intermediate-not-training-ready'
+    assert report['sample_rate'] == rate
+    assert report['training_authorized'] is False
+    prepared = [json.loads(line) for line in (output/'dataset.jsonl').read_text().splitlines()]
+    assert prepared[0]['source_record']['text'] == rows[0]['text']
+    assert prepared[0]['text'] == rows[0]['text'].strip()
+    assert [sha256(root / row['audio_path']) for row in rows] == original_hashes
+    for split in ('train', 'validation', 'test'):
+        native = [json.loads(line) for line in (output/f'{architecture}-{split}.jsonl').read_text().splitlines()]
+        expected = [row for row in prepared if row['split'] == split]
+        assert [row['id'] for row in native] == [row['id'] for row in expected]
+        assert [row['group_id'] for row in native] == [row['group_id'] for row in expected]
+        for row in native:
+            values, actual = read_pcm(Path(row['audio_filepath']))
+            assert actual == rate and len(values) == rate
+            assert 'context_audio_filepath' not in row
+            assert row['duration'] == 1.
+    rights = json.loads((output/'training-rights.pending.json').read_text())
+    assert rights['dataset_sha256'] == report['dataset_sha256']
+    assert rights['source_manifest_sha256'] == sha256(manifest)
+    assert not any(rights[key] for key in ('training_authorized', 'training_rights_confirmed', 'voice_rights_confirmed'))
+    assert any('ElevenLabs' in gate for gate in report['training_gates'])
+    with pytest.raises(ValueError, match='already exists'):
+        prepare_collection(manifest, output, root, architecture=architecture)
+
+
+def test_f5_export_keeps_cross_partition_groups_blocked(tmp_path):
+    root, rows = fixture_dataset(tmp_path)
+    rows[1]['group_id'] = rows[0]['group_id']
+    manifest = root / 'dataset.jsonl'
+    manifest.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    report = prepare_collection(manifest, tmp_path/'f5', root, architecture='f5')
+    assert report['status'] == 'blocked'
+    assert report['accepted'] == 1
+    assert len(report['rejected']) == 2
+    assert (tmp_path/'f5/f5-train.jsonl').read_text() == ''

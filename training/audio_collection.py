@@ -212,12 +212,17 @@ def validated_split_plan(path: Path, source_hash: str, rows: list[dict]) -> tupl
 
 def prepare_collection(manifest: Path, output: Path, dataset_root: Path,
                        provenance: Path | None = None,
-                       split_plan: Path | None = None) -> dict:
+                       split_plan: Path | None = None, *,
+                       architecture: str = 'legacy-piper') -> dict:
     """Build a new immutable technical snapshot, with auditory review pending.
 
     Returns a blocked report if records fail, while preserving every rejection.
     Output must not exist; reruns always use a new versioned destination.
     """
+    rates = {'legacy-piper': RATE, 'f5': 24000, 'magpie': 22050}
+    if architecture not in rates:
+        raise ValueError('unsupported collection architecture')
+    target_rate = rates[architecture]
     manifest, root, output = manifest.resolve(), dataset_root.resolve(), output.resolve()
     if not manifest.is_file() or not root.is_dir():
         raise FileNotFoundError('dataset manifest/root not available; transfer the real dataset first')
@@ -310,22 +315,22 @@ def prepare_collection(manifest: Path, output: Path, dataset_root: Path,
                 raise ValueError('silent/empty audio')
             if rails:
                 raise ValueError(f'clipping: {rails} samples at PCM rails')
-            converted = resample_pcm(values, actual_rate)
+            converted = resample_pcm(values, actual_rate, target_rate)
             target = staging / 'audio' / (identifier + '.wav')
-            write_pcm(target, converted, RATE)  # refuses overshoot and quantization wraparound
+            write_pcm(target, converted, target_rate)  # refuses overshoot and quantization wraparound
             output_values, output_rate = read_pcm(target)
-            if output_rate != RATE or abs(len(output_values) / RATE - duration) > 1 / RATE:
+            if output_rate != target_rate or abs(len(output_values) / target_rate - duration) > 1 / target_rate:
                 raise ValueError('conversion changed duration unexpectedly')
             candidate = dict(id=identifier, group_id=group,
                 split=assignments.get(identifier, row['split']), source_split=row['split'], category=category,
                 text=text, audio_filepath=str(output / 'audio' / target.name),
-                sample_rate=RATE, channels=1, duration=len(converted) / RATE, sha256=sha256(target),
+                sample_rate=target_rate, channels=1, duration=len(converted) / target_rate, sha256=sha256(target),
                 original_audio_filepath=str(source), original_audio_sha256=digest,
                 source_hash_status='verified-against-declared' if expected_hash else 'computed-no-prior-hash',
                 source_sample_rate=actual_rate, source_sample_width=width,
                 source_duration=duration, source_peak=peak, source_rms=rms,
                 peak=float(np.max(np.abs(output_values))), rms=float(np.sqrt(np.mean(output_values**2))),
-                conversion_duration_delta_seconds=len(output_values) / RATE - duration,
+                conversion_duration_delta_seconds=len(output_values) / target_rate - duration,
                 conversion_rms_delta=float(np.sqrt(np.mean(output_values**2))) - rms,
                 quality_status='accepted', alignment_status='unverified', content_review='pending',
                 schema=SCHEMA, source_record=row, source_line=line_number,
@@ -421,7 +426,8 @@ def prepare_collection(manifest: Path, output: Path, dataset_root: Path,
         'groups_by_split': {s: len({r['group_id'] for r in records if r['split'] == s}) for s in SPLITS},
         'source_sample_formats': dict(Counter(f"PCM{r['source_sample_width'] * 8}" for r in records)),
         'original_duration_seconds': sum(r['source_duration'] for r in records),
-        'sample_rate': RATE, 'channels': 1, 'sample_format': 'PCM16',
+        'architecture': architecture,
+        'sample_rate': target_rate, 'channels': 1, 'sample_format': 'PCM16',
         'dataset_sha256': sha256(staging / 'dataset.jsonl'), 'trainval_sha256': sha256(staging / 'trainval.jsonl'),
         'metadata_sha256': sha256(staging / 'metadata.csv'),
         'split_manifest_sha256': {s: sha256(staging / (s + '.jsonl')) for s in SPLITS},
@@ -437,6 +443,39 @@ def prepare_collection(manifest: Path, output: Path, dataset_root: Path,
         'review_required': ['ASR/content audit', 'stratified owner listening and all suspicious examples',
                             'rights confirmation', 'cross-split near-variant resolution', 'decoder reconstruction'],
     }
+    if architecture != 'legacy-piper':
+        # These are private intermediate manifests, not an approval to train.
+        # No context utterance is guessed for Magpie; select it during the
+        # reviewed training preparation, within each existing partition.
+        for split in SPLITS:
+            subset = [r for r in records if r['split'] == split]
+            native_rows = [dict(audio_filepath=r['audio_filepath'], text=r['text'],
+                                duration=r['duration'], id=r['id'], group_id=r['group_id'],
+                                language=('pt-BR' if architecture == 'magpie' else 'pt'), speaker=0) for r in subset]
+            dump(staging / f'{architecture}-{split}.jsonl', native_rows, lines=True)
+        summary['architecture_manifest_status'] = 'intermediate-not-training-ready'
+        summary['architecture_preparation_required'] = (
+            ['official F5 arrow/duration/vocabulary preprocessing with pinned source',
+             'held-out vocabulary coverage and pronunciation review'] if architecture == 'f5' else
+            ['explicit context_audio_filepath/context_text from same speaker and partition',
+             'dataset_meta tokenizer_names=portuguese_Brazilian_phoneme and reviewed speaker mapping',
+             'official NanoCodec cache preparation with pinned tokenizer/model'])
+        summary['training_gates'] = ['owner approval before pilot or full fine-tuning',
+                                     'hash-bound voice and dataset training rights evidence',
+                                     'ElevenLabs outputs: applicable terms explicitly permit this training use',
+                                     'ASR/content and owner listening review; acoustic roundtrip approval',
+                                     'exclusive GPU window; measured batch feasibility']
+        # The template is deliberately unapproved and keeps original records and
+        # original text in dataset.jsonl/source_record, alongside source hashes.
+        dump(staging / 'training-rights.pending.json', {
+            'source_manifest_sha256': source_hash,
+            'dataset_sha256': summary['dataset_sha256'], 'architecture': architecture,
+            'training_authorized': False, 'training_rights_confirmed': False,
+            'voice_rights_confirmed': False, 'provider': '', 'terms_url': '',
+            'terms_reviewed_on': '', 'rights_evidence_reference': '',
+            'permitted_use': 'fine-tuning acoustic model; separately review codec/vocoder adaptation',
+            'owner_approval_reference': '',
+            'note': 'Import is technical preparation; existing corpus approval is not inferred.'})
     dump(staging / 'import-report.json', summary)
     # Refuse overwrites; immutable snapshot includes hashes and can be reverified.
     for path in staging.rglob('*'):

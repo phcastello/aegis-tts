@@ -1,0 +1,47 @@
+{
+  "candidate": "firstpixel-f5-ptbr-vocos",
+  "source": {
+    "repository": "SWivid/F5-TTS",
+    "revision": "45868abaabd74aabf03cd673d6dd00cc9d9c01ae",
+    "version": "1.1.22",
+    "license": "MIT"
+  },
+  "artifacts": [
+    {
+      "repository": "firstpixel/F5-TTS-pt-br",
+      "revision": "0af67bc061699cab46218c150948910fde209614",
+      "path": "pt-br/model_last.safetensors",
+      "local_name": "model_last.safetensors",
+      "bytes": 1348431976,
+      "sha256": "c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f",
+      "license": "CC-BY-NC-4.0"
+    },
+    {
+      "repository": "SWivid/F5-TTS",
+      "revision": "84e5a410d9cead4de2f847e7c9369a6440bdfaca",
+      "path": "F5TTS_Base/vocab.txt",
+      "local_name": "vocab.hf.txt",
+      "bytes": 13800,
+      "sha256": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c",
+      "license": "CC-BY-NC-4.0 (repository)"
+    },
+    {
+      "repository": "charactr/vocos-mel-24khz",
+      "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "path": "config.yaml",
+      "local_name": "vocos/config.yaml",
+      "bytes": 461,
+      "sha256": "da9033922f969a47f0c160010226919e59f27761fd5066f3828d46de6650b0fc",
+      "license": "MIT"
+    },
+    {
+      "repository": "charactr/vocos-mel-24khz",
+      "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "path": "pytorch_model.bin",
+      "local_name": "vocos/pytorch_model.bin",
+      "bytes": 54365991,
+      "sha256": "97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a",
+      "license": "MIT"
+    }
+  ]
+}
