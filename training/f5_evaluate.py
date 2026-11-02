@@ -240,8 +240,8 @@ def asr(root):
     import numpy as np
     from scipy.signal import resample_poly
     from faster_whisper import WhisperModel
-    from scripts.dataset_content_audit import comparison
-    settings=dict(repository='Systran/faster-whisper-small',revision='536b0662742c02347bc0e980a01041f333bce120',device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,language='pt',beam_size=5,temperature=0,vad_filter=False,condition_on_previous_text=False,resampling='scipy resample_poly Kaiser10 to16k; no gain or trimming')
+    from training.f5_asr_metrics import plain_word_comparison as comparison
+    settings=dict(repository='Systran/faster-whisper-small',revision='536b0662742c02347bc0e980a01041f333bce120',device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,language='pt',beam_size=5,temperature=0,vad_filter=False,condition_on_previous_text=False,resampling='scipy resample_poly Kaiser10 to16k; no gain or trimming',scoring='NFD/accents/case/punctuation only; no gateway normalization; numeric formatting can inflate WER')
     settings_hash=hashlib.sha256(json.dumps(settings,sort_keys=True).encode()).hexdigest()
     write_json(root/'asr/settings.json',dict(settings=settings,sha256=settings_hash,model_receipt_sha256=digest(OLD/'asr/download-receipt.json')))
     model=WhisperModel(str(OLD/'asr/model'),device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,local_files_only=True)
@@ -254,14 +254,18 @@ def asr(root):
     result_path=root/'asr/results.json'
     old_records=json.loads(result_path.read_text()) if result_path.exists() else []
     cache={r['cache_key']:r for r in old_records if r.get('settings_sha256')==settings_hash and r.get('cache_key')}
+    cache_dir=root/'asr/cache';cache_dir.mkdir(parents=True,exist_ok=True)
     records=[]
     def check(source,metadata):
         sha=digest(source)
         key=hashlib.sha256(json.dumps([metadata,sha,settings_hash],sort_keys=True).encode()).hexdigest()
-        if key in cache:record=cache[key]
+        cached_path=cache_dir/(key+'.json')
+        if cached_path.exists():record=json.loads(cached_path.read_text())
+        elif key in cache:record=cache[key]
         else:
             started=time.perf_counter();text=transcribe(source)
             record=dict(**metadata,hypothesis=text,audio_sha256=sha,settings_sha256=settings_hash,cache_key=key,seconds=time.perf_counter()-started,**comparison(metadata['reference'],text))
+        write_json(cached_path,record)
         records.append(record);write_json(result_path,records)
         print(json.dumps({k:record[k] for k in ('label','case','word_error_rate')},ensure_ascii=False),flush=True)
     for p in sorted((root/'evaluations').glob('*/*.json')):
