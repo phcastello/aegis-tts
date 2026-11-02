@@ -92,3 +92,17 @@ def test_closed_gpu_authorization_refuses_before_model_load(tmp_path, monkeypatc
     monkeypatch.setattr(evaluate, 'load_model', lambda path: pytest.fail('must reject before model load'))
     with pytest.raises(ValueError, match='active'):
         evaluate.final(tmp_path)
+
+
+def test_local_helpers_ignore_unrelated_benchmarks_package(monkeypatch):
+    import sys
+    from types import ModuleType
+    # The real isolated environment contains a regular package with this name.
+    # Evaluation must select the repository's standalone helpers explicitly.
+    monkeypatch.setitem(sys.modules, 'benchmarks', ModuleType('benchmarks'))
+    from f5_probe import duration_frames as local_duration
+    from benchmark import pcm_metrics as local_metrics
+    import inspect
+    expected = Path(__file__).resolve().parents[1] / 'benchmarks' / 'architecture_compare'
+    assert Path(inspect.getfile(local_duration)).parent == expected
+    assert Path(inspect.getfile(local_metrics)).parent == expected
