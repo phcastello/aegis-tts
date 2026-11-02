@@ -87,3 +87,17 @@ def test_latency_aggregates_keep_native_availability_and_playback_proxy_separate
     assert aggregate['estimated_first_audible_playback_ms']['median']==2327.5
     assert report['initial_validation']['loss']==.784124
     assert (directory/'results.json').read_bytes()==original
+
+
+def test_optional_standard_proxy_and_browser_receipts_remain_absent_until_created(tmp_path):
+    report,_,_=collect(tmp_path)
+    assert report['qwen_standard_proxy'] is None
+    assert report['browser_playback'] is None
+    proxy={'observations':[{'windowed_onset':{'first_useful_pcm_available_ms':1662.43}}]}
+    browser={'native_preserved':True,'conversion':'nearest PCM16'}
+    write(tmp_path/'report','qwen-standard-proxy.json',proxy)
+    write(tmp_path/'listening','browser-playback-receipt.json',browser)
+    report,_,_=collect(tmp_path)
+    assert report['qwen_standard_proxy']==proxy
+    assert report['browser_playback']==browser
+    assert 'listening_package' in report['pending']

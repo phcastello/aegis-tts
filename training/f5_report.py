@@ -150,6 +150,8 @@ def collect(root):
         code_provenance_scope='repository script contents at report generation; per-ASR audio/settings hashes remain in ASR records',
         code_provenance=[dict(path=str(p.relative_to(repository)),sha256=sha256(p)) for p in code_paths if p.is_file()],
         acoustics=load(root/'acoustics/results.json'),
+        qwen_standard_proxy=load(root/'report/qwen-standard-proxy.json'),
+        browser_playback=load(root/'listening/browser-playback-receipt.json'),
         operation=operation,
         listening_manifests=[dict(path=str(p),sha256=sha256(p)) for p in package_manifests],
         package_archives=[dict(path=str(p),bytes=p.stat().st_size,sha256=sha256(p)) for p in sorted(root.glob('*.zip'))],
@@ -157,6 +159,7 @@ def collect(root):
         interpretation={'loss':'fixed held-out validation estimates CFM objective, not perceptual identity',
             'asr':'auxiliary pronunciation/intelligibility indicator; not human approval',
             'latency':'F5 ttfa_ms/first_pcm_ms measure completed native waveform availability; estimated_first_audible_playback_ms adds digital activity offset assuming immediate FIFO playback, excluding client/device delay',
+            'qwen_standard_proxy':'offline shared windowed proxy over preserved Qwen PCM and actual arrival schedules; Qwen includes HTTP/DSP service context while F5 native generation does not',
             'qwen':'operational single-phrase HTTP baseline: first received block with any abs(PCM16)>32, not playback onset; F5 onset proxy instead requires two10ms frames with peak>100 and RMS>30; use matched measurement methods before direct comparison'})
     return result,updates,events
 
@@ -210,6 +213,8 @@ def generate(root,output,hash_checkpoints=True):
                   root/'prepared/audit.json',root/'cpu-check.json',root/'operations/baseline.json',root/'operations/restored.json',
                   root/'operations/gpu-window.json',root/'evaluations/checkpoint-manifest.json',root/'evaluations/block-streaming.json',root/'asr/results.json']
     source_paths.extend([root/'acoustics/results.json',root/'asr/settings.json'])
+    source_paths.extend([root/'report/qwen-standard-proxy.json',root/'listening/browser-playback-receipt.json',
+                         root/'recompute_qwen_pcm.py'])
     source_paths.extend(root.glob('benchmark-*.json'))
     for directory in [root/'operations',*sorted(root.glob('operations-resume-*'))]:
         source_paths.extend(directory/name for name in ('baseline.json','restored.json','gpu-window.json'))

@@ -301,7 +301,7 @@ def package(root):
             rows.append((str(q.relative_to(dest)),digest(source)))
     metadata={'dataset_zip_sha256':'5bbd8288d9ab795a83ffd1599b0c5a32c00b401cb903b368a183d7ee7580c8df','source_commit':'45868abaabd74aabf03cd673d6dd00cc9d9c01ae','base_revision':'0af67bc061699cab46218c150948910fde209614','base_sha256':'c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f','vocab_sha256':'2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c','vocos_sha256':'97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a','owner_perceptual_approval':False}
     if conditioning:metadata['conditioning_reference']=conditioning
-    for name,source in [('checkpoints',root/'evaluations/checkpoint-manifest.json'),('training',root/'training-result.json'),('asr',root/'asr/results.json'),('asr_settings',root/'asr/settings.json')]:
+    for name,source in [('checkpoints',root/'evaluations/checkpoint-manifest.json'),('training',root/'training-result.json'),('asr',root/'asr/results.json'),('asr_settings',root/'asr/settings.json'),('qwen_audio_cohort',OLD/'qwen-fixed-cohort/manifest.json'),('qwen_operational_baseline',root/'operations/baseline.json')]:
         if source.exists():metadata[name]=json.loads(source.read_text())
     write_json(dest/'experiment.json',metadata)
     texts={c['id']:c['text'] for c in corpora()}
