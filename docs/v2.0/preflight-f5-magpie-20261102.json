@@ -1,0 +1,146 @@
+{
+  "recorded_utc": "2026-11-02T08:10:31Z",
+  "private_root": "/var/tmp/aegis-v2-evaluation-20261102",
+  "additional_budget_bytes": 40000000000,
+  "initial_df_observed_human": "48G available, 60% used; prior investigation16.65GiB no longer current",
+  "unique_allocated_bytes_by_directory_counted_in_name_order": {
+    "__root_files__": 58089472,
+    "asr": 486260736,
+    "cache": 6920138752,
+    "envs": 97636352,
+    "f5": 1410191360,
+    "listening-codecs-blind": 2879488,
+    "listening-keys": 20480,
+    "listening-source": 1441792,
+    "magpie": 434642944,
+    "package-check-01": 22376448,
+    "package-check-02": 22388736,
+    "pacote-audicao-final": 24203264,
+    "qwen-fixed-cohort": 4292608,
+    "rollback-current": 32768
+  },
+  "shared_cache_note": "uv hardlinks share environment and cache inodes; per-directory values depend on counting order; aggregate physical total is authoritative",
+  "physical_allocated_bytes_unique": 9484595200,
+  "filesystem_available_bytes": 41399472128,
+  "operational_free_margin_bytes": 5368709120,
+  "gpu": "NVIDIA RTX A2000 12GB, 535.309.01, 11514 MiB, 10674 MiB, 601 MiB",
+  "cuda_experiments_executed": false,
+  "production_stopped": false,
+  "training_executed": false,
+  "environment": "/var/tmp/aegis-v2-evaluation-20261102/envs/f5",
+  "caches": [
+    "/var/tmp/aegis-v2-evaluation-20261102/cache/uv",
+    "/var/tmp/aegis-v2-evaluation-20261102/cache/hf",
+    "/var/tmp/aegis-v2-evaluation-20261102/cache/xdg"
+  ],
+  "versions_lock": "benchmarks/architecture_compare/requirements-f5-cu118.lock.txt",
+  "f5_artifacts": [
+    {
+      "repository": "firstpixel/F5-TTS-pt-br",
+      "revision": "0af67bc061699cab46218c150948910fde209614",
+      "path": "pt-br/model_last.safetensors",
+      "local_name": "model_last.safetensors",
+      "bytes": 1348431976,
+      "sha256": "c25e2678bdd4304071e3d0e39a283a7d23ffbc23678080c5b0b741dda2e07f0f",
+      "license": "CC-BY-NC-4.0"
+    },
+    {
+      "repository": "SWivid/F5-TTS",
+      "revision": "84e5a410d9cead4de2f847e7c9369a6440bdfaca",
+      "path": "F5TTS_Base/vocab.txt",
+      "local_name": "vocab.hf.txt",
+      "bytes": 13800,
+      "sha256": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c",
+      "license": "CC-BY-NC-4.0 (repository)"
+    },
+    {
+      "repository": "charactr/vocos-mel-24khz",
+      "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "path": "config.yaml",
+      "local_name": "vocos/config.yaml",
+      "bytes": 461,
+      "sha256": "da9033922f969a47f0c160010226919e59f27761fd5066f3828d46de6650b0fc",
+      "license": "MIT"
+    },
+    {
+      "repository": "charactr/vocos-mel-24khz",
+      "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+      "path": "pytorch_model.bin",
+      "local_name": "vocos/pytorch_model.bin",
+      "bytes": 54365991,
+      "sha256": "97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a",
+      "license": "MIT"
+    }
+  ],
+  "asr_artifacts": {
+    "repository": "Systran/faster-whisper-small",
+    "revision": "536b0662742c02347bc0e980a01041f333bce120",
+    "files": [
+      {
+        "file": "config.json",
+        "bytes": 2370,
+        "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828",
+        "manifest_verification": "git blob SHA1"
+      },
+      {
+        "file": "model.bin",
+        "bytes": 483546902,
+        "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+        "manifest_verification": "LFS SHA256"
+      },
+      {
+        "file": "tokenizer.json",
+        "bytes": 2203239,
+        "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+        "manifest_verification": "git blob SHA1"
+      },
+      {
+        "file": "vocabulary.txt",
+        "bytes": 459861,
+        "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+        "manifest_verification": "git blob SHA1"
+      }
+    ],
+    "total_bytes": 486212372,
+    "format": "CTranslate2 native model.bin; not PyTorch pickle",
+    "license_in_model_card": "MIT"
+  },
+  "nanocodec": {
+    "revision": "fc00890b604aa2de298d2641ffc6c5f6caf8c4d7",
+    "bytes": 425021440,
+    "sha256": "28c2518de3e3d5a2c7d9bca40a7ebc0644eb76c60b890970365325bdd8e9f099"
+  },
+  "not_downloaded": [
+    "F5 historical .pt files",
+    "Magpie acoustic 1.47GB",
+    "VoxCPM2 weights"
+  ],
+  "authorization_still_required": "explicit owner exclusive GPU interruption window; private training and promotion not authorized",
+  "additional_budget_remaining_bytes": 30515404800,
+  "listening_zip": {
+    "zip_bytes": 20369744,
+    "zip_sha256": "cd1ba4a1a9487e62436bfecb04eebd49fc0bf828759b3955027091deaf8f506c",
+    "blind_pairs": 12,
+    "qwen_cases": 9,
+    "f5_observations": [
+      {
+        "case": "novel_short",
+        "nfe": 16,
+        "repetition": 0
+      },
+      {
+        "case": "novel_short",
+        "nfe": 32,
+        "repetition": 0
+      },
+      {
+        "case": "novel_short",
+        "nfe": 8,
+        "repetition": 0
+      }
+    ]
+  },
+  "delivery_path": "/home/phc/aegisvoice-v2-audicao-20261102.zip",
+  "cpu_f5_inference_successes": 3,
+  "asr_successes": 12
+}

@@ -170,3 +170,109 @@ python3 benchmarks/architecture_compare/import_qwen_history.py \
 Os controles são Qwen antes/depois da revisão de latência e bruto→DSP.
 **Não** são uma comparação GPT-SoVITS/VoxCPM2. A decisão corrente e os
 impedimentos estão na [comparação de arquiteturas](../../docs/v2.0/architecture-comparison.md).
+
+## Investigação F5-TTS PT-BR / Magpie v2607
+
+O estado atual e os resultados reais estão em
+[comparação](../../docs/v2.0/architecture-comparison.md),
+[F5](../../docs/v2.0/f5-evidence.md) e
+[Magpie](../../docs/v2.0/magpie-evidence.md). Esses documentos substituem a antiga
+prioridade GPT-SoVITS e o critério eliminatório de 32 kHz. Piper continua encerrado.
+
+`f5_probe.py` acrescenta somente um runner offline específico; reaproveita os
+checks de janela/GPU e o proxy de PCM útil existentes. O plano padrão é seguro:
+
+```bash
+python3 benchmarks/architecture_compare/f5_probe.py
+python3 benchmarks/architecture_compare/magpie_codec_probe.py
+```
+
+F5 aceita `--execute --action roundtrip|infer --device cpu|cuda`, arquivos locais
+verificados e referência com transcrição. A fonte precisa coincidir com o pin.
+CUDA exige janela aprovada e GPU exclusiva; CPU esconde CUDA. O runner nunca
+interrompe produção. NFE `8 16 32` usa Euler, referência mel em cache e frase
+inteira. `--warmup` é opcional e preserva áudio/tempo; nenhuma chamada é descartada.
+O formato nativo salvo é FLOAT WAV, sem normalização/trim/ASR. Métricas PCM16 só
+são calculadas quando a saída cabe na faixa sem clipping. O custo da referência
+é separado da inferência. O suplemento Aegis fica em corpus separado, sem mudar
+os nove textos originais.
+
+[artifacts.f5.json](artifacts.f5.json) fixa a lista mínima de quatro downloads,
+revisões, bytes e hashes. O checkpoint acústico histórico `.pt` não é necessário.
+Instale o ambiente fora de produção; o freeze real está em
+[requirements-f5-cu118.lock.txt](requirements-f5-cu118.lock.txt). A wheel cu118
+foi selecionada para o driver 535; execução CUDA ainda exige smoke real. Exemplo
+para recriar o ambiente, com espaço previamente conferido:
+
+```bash
+python3 -m venv /PRIVADO/env-f5
+/PRIVADO/env-f5/bin/pip install --extra-index-url https://download.pytorch.org/whl/cu118 \
+  -r benchmarks/architecture_compare/requirements-f5-cu118.lock.txt
+```
+
+O F5 roda pelo `source-dir` fixado e não precisa instalar Gradio, bitsandbytes,
+ASR ou o conjunto completo de extras upstream. O freeze inclui dependências
+indiretas exigidas pelo import do Trainer oficial e o auditor ASR CPU opcional
+instalado nesta investigação; o F5 não chama esse auditor. Caches devem permanecer sob
+uma raiz experimental privada e entrar no inventário de 40 GB; hardlinks uv
+precisam ser contados uma vez no uso físico.
+
+O probe NanoCodec é somente CPU e executa definições numéricas oficiais
+verificadas, sem instalar NeMo completo. O probe de frontend confere fontes e
+G2P/dicionário. Nenhum deles prova o runtime de síntese Magpie:
+
+```bash
+python3 benchmarks/architecture_compare/magpie_frontend_probe.py \
+  --artifact-dir /PRIVADO/magpie
+CUDA_VISIBLE_DEVICES='' /PRIVADO/env-f5/bin/python \
+  benchmarks/architecture_compare/magpie_codec_probe.py --execute \
+  --artifact-dir /PRIVADO/magpie --audio /PRIVADO/tratado.wav \
+  --output /PRIVADO/NOVO_ROUNDTRIP
+```
+
+O roundtrip precisa partir do áudio tratado, preservando A original, B convertido
+e C reconstruído. Se não houver original de 48 kHz, registrar sua ausência e a
+taxa real, sem inventá-lo por upsampling. BigVGAN exige mel/checkpoint coerentes;
+não trocar o decoder do checkpoint Vocos por simples coincidência de shapes.
+
+## ZIP privado para ouvir em outro ambiente
+
+O script package_listening.py reutiliza o empacotador A/B existente e lê somente
+os WAVs/recibos explícitos desta investigação. Não acessa rede, GPU, pesos ou
+ambientes. Precisa de NumPy/SoundFile para conversão explícita FLOAT→PCM16.
+
+    CUDA_VISIBLE_DEVICES='' /PRIVADO/env-f5/bin/python \
+      benchmarks/architecture_compare/package_listening.py \
+      --experiment-root /var/tmp/aegis-v2-evaluation-20261102 \
+      --output-dir /PRIVADO/NOVO_PACOTE \
+      --zip /PRIVADO/NOVO_PACOTE.zip --require-nfe 8 16 32
+
+O destino e o ZIP devem ser novos, fora do Git. A opção --require-nfe impede
+entregar uma rodada final antes de todos os passos pedidos terminarem. Sem ela,
+o pacote contém todas as saídas concluídas, sem escolher a melhor amostra.
+Inclui os seis controles A↔B/B↔C/A↔C, a coorte Qwen de nove textos quando seu
+manifesto está presente, comparações entre NFEs da mesma repetição e Qwen↔F5
+somente com texto igual. Produção com DSP e F5 nativo são identificados na chave;
+os tempos CPU e GPU não são comparáveis.
+
+Depois de extrair **todo** o ZIP, index.html abre a escuta offline. O formulário
+tem critérios por amostra, preferência por par e notas; os botões baixam JSON
+ou CSV preenchido, sem servidor. Existe também ficha-vazia.csv. A coorte Qwen
+identificada está em página separada, recomendada após a rodada cega. Áudios
+numéricos originais, conversões, hashes, métricas, ASR limitado quando disponível
+e identidades ficam em NAO_ABRIR_ANTES_DA_ESCUTA/. O ASR só entra se o hash
+corresponder a uma amostra empacotada; não substitui a audição.
+
+O ZIP exclui pesos, caches, credenciais, transcrições de referências adicionais
+e caminhos absolutos do host. Conversões não aplicam ganho, corte, limiter,
+denoiser ou resampling; erro de PCM16 limitado a um LSB. Se uma saída FLOAT
+exceder a faixa, sua conversão é bloqueada e o original FLOAT permanece no
+pacote e no par, com limitação de reprodução registrada. Não se corta o pico
+nem se exclui a tentativa; suporte FLOAT e saturação na reprodução dependem
+do navegador/dispositivo.
+
+    python3 -m pytest -q tests/test_package_listening.py
+
+Os testes verificam preservação de overload, remoção de caminhos privados,
+inclusão de todas as tentativas e exclusão de arquivos não selecionados.
+O ZIP é produzido localmente e permanece privado; o comando não o publica.
