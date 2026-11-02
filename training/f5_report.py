@@ -121,14 +121,13 @@ def collect(root):
     checkpoints=load(root/'evaluations/checkpoint-manifest.json',[])
     operation=operation_windows(root)
     training=load(root/'training-result.json')
-    package_manifests=list(root.glob('**/manifest-sha256.json'))
-    package_manifests=[p for p in package_manifests if 'report' not in p.parts]
+    package_manifests=list((root/'listening').glob('manifest-sha256.json'))
     best=load(root/'best.json')
     pending=[]
     for name,present in [('training_result',training is not None),('final_cuda_evaluations',bool(checkpoints)),
                          ('all_gpu_phases_closed',(root/'gpu-all-phases-complete.json').is_file()),
                          ('production_restoration_verified',operation['production_restoration_verified']),
-                         ('listening_package',bool(package_manifests)),('owner_perceptual_review',False)]:
+                         ('listening_package',bool(package_manifests) and (root/'listening/index.html').is_file()),('owner_perceptual_review',False)]:
         if not present:pending.append(name)
     result=dict(schema='aegisvoice.v2.training.report.v1',generated_utc=datetime.now(timezone.utc).isoformat(),
         private_root=str(root),dataset=load(root/'prepared/audit.json'),cpu_preflight=load(root/'cpu-check.json'),
@@ -139,6 +138,7 @@ def collect(root):
         inference=aggregate,checkpoint_manifest=checkpoints,
         heldout_test={p.parent.name:load(p) for p in sorted((root/'evaluations').glob('*/heldout-test.json'))},
         block_streaming=load(root/'evaluations/block-streaming.json'),asr=load(root/'asr/results.json'),
+        acoustics=load(root/'acoustics/results.json'),
         operation=operation,
         listening_manifests=[dict(path=str(p),sha256=sha256(p)) for p in package_manifests],
         package_archives=[dict(path=str(p),bytes=p.stat().st_size,sha256=sha256(p)) for p in sorted(root.glob('*.zip'))],
@@ -194,6 +194,7 @@ def generate(root,output,hash_checkpoints=True):
     source_paths=[root/'events.jsonl',root/'pipeline.jsonl',root/'loss-history.json',root/'training-result.json',root/'best.json',
                   root/'prepared/audit.json',root/'cpu-check.json',root/'operations/baseline.json',root/'operations/restored.json',
                   root/'operations/gpu-window.json',root/'evaluations/checkpoint-manifest.json',root/'evaluations/block-streaming.json',root/'asr/results.json']
+    source_paths.append(root/'acoustics/results.json')
     source_paths.extend(root.glob('benchmark-*.json'))
     for directory in [root/'operations',*sorted(root.glob('operations-resume-*'))]:
         source_paths.extend(directory/name for name in ('baseline.json','restored.json','gpu-window.json'))

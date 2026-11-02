@@ -154,6 +154,39 @@ restaurada. A restauração da primeira janela não é apresentada como estado f
 enquanto a janela retomada estiver ativa. A melhoria de loss ainda não comprova
 pronúncia, identidade robótica ou aprovação perceptiva da candidata.
 
+## Acompanhamento acústico em CPU
+
+`training.f5_acoustics` acompanha `novel_short` e `aegis_command`, mantendo
+NFE 16, repetição zero e a seed registrada em cada recibo. Reutiliza RMS,
+centroide espectral, flatness e proporções de energia por banda existentes no
+projeto. Conserva as métricas na taxa nativa e também analisa todos os áudios
+em 24 kHz, com janela 1.024/hop 256, para controlar diferenças de banda e janela
+entre originais de 48 kHz e saídas de 24 kHz. Os WAVs permanecem intactos.
+
+A F0 é estimada por `librosa.yin`, faixa de 60 a 500 Hz. A máscara aceita frames
+com RMS acima do maior valor entre -55 dBFS e 30 dB abaixo do pico de RMS do
+arquivo. Essa máscara mede atividade energética; não é um classificador de
+vozeamento. Fricativas, efeitos sintéticos e erros de oitava podem produzir
+candidatos incorretos. São descritores auxiliares, sem critério de parada
+independente ou demonstração de identidade vocal.
+
+Na primeira coleta, o prompt `aegis_ptbr_0586` apresentou mediana YIN de
+196,19 Hz tanto no original como no convertido. Na época três, as medianas
+foram 209,94 Hz para `novel_short` e 210,74 Hz para `aegis_command`. Os textos
+são diferentes do prompt; essas diferenças não isolam um efeito do treinamento.
+As comparações longitudinais posteriores mantêm texto, NFE, repetição e seed.
+
+Nos três roundtrips Vocos já disponíveis, a mediana YIN mudou de -3,93 a +0,55 Hz,
+o RMS de -0,42 a -0,05 dB e o centroide de -1,22 a +28,45 Hz na análise comum
+de 24 kHz. Isso registra alterações acústicas, sem substituir a escuta dos
+efeitos robóticos. A reconstrução Vocos do prompt 0586 não estava disponível;
+não foi gerada uma nova reconstrução para esta medição.
+
+Os resultados privados estão em `acoustics/results.json`, com hashes dos WAVs
+e dos caches de análise, além dos gráficos independentes `acoustics/f0.png` e
+`acoustics/spectrum.png`. O gerador do relatório incorpora esses resultados e
+mantém a necessidade de avaliação perceptiva do proprietário.
+
 ## Operação e baseline anterior à interrupção
 
 O snapshot preserva o container original
@@ -218,6 +251,10 @@ python3 -m training.av2_ops \
   -m training.f5_run --run-root /var/tmp/aegisvoice-v2-training-20261102
 
 # Após todas as operações CUDA e a restauração: ASR, pacote offline e curvas.
+CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 NUMBA_NUM_THREADS=2 \
+  /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
+  -m training.f5_acoustics \
+  --run-root /var/tmp/aegisvoice-v2-training-20261102
 CUDA_VISIBLE_DEVICES='' /var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
   -m training.f5_evaluate --action asr \
   --run-root /var/tmp/aegisvoice-v2-training-20261102
@@ -240,8 +277,11 @@ agregado conserva ausências como pendências, sem inventar métricas.
 Testes CPU desta preparação: dez casos do limite de extração em
 `tests/test_f5_preparation.py` passaram, incluindo caminhos maliciosos, symlinks,
 hash incorreto, destinos duplicados, CRC corrompido e permissões privadas.
-Três regressões adicionais em `tests/test_f5_report.py` passaram: soma das
+Quatro regressões adicionais em `tests/test_f5_report.py` passaram: soma das
 indisponibilidades de duas janelas, escolha da restauração mais recente e
-manutenção da pendência enquanto uma retomada está ativa. As avaliações CUDA
+manutenção da pendência enquanto uma retomada está ativa; um manifesto acústico
+também não pode satisfazer a pendência do pacote auditivo. A estimativa YIN foi
+conferida com seno sintético de 150 Hz e silêncio (sem frames ativos).
+As avaliações CUDA
 finais, o tempo total de indisponibilidade, os checkpoints selecionados, as
 métricas finais e os commits serão registrados após a execução.

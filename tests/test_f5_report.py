@@ -60,3 +60,12 @@ def test_windows_order_by_actual_time_and_ignore_unused_snapshot(tmp_path):
     assert result['restored']['container_id']=='final'
     assert result['downtime_seconds']==960
     assert len(result['windows'])==3
+
+
+def test_acoustics_manifest_cannot_satisfy_listening_package_completion(tmp_path):
+    write(tmp_path/'acoustics','manifest-sha256.json',{'f0.png':'example'})
+    write(tmp_path/'acoustics','results.json',{'owner_perceptual_approval':False})
+    report,_,_=collect(tmp_path)
+    assert 'listening_package' in report['pending']
+    assert report['listening_manifests']==[]
+    assert report['acoustics']=={'owner_perceptual_approval':False}
