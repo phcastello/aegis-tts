@@ -147,6 +147,8 @@ def collect(root):
         heldout_test={p.parent.name:load(p) for p in sorted((root/'evaluations').glob('*/heldout-test.json'))},
         block_streaming=load(root/'evaluations/block-streaming.json'),asr=load(root/'asr/results.json'),
         asr_settings=load(root/'asr/settings.json'),
+        asr_checkpoint_receipts={p.name:load(p) for p in sorted((root/'asr').glob('pilot-epoch-*.json'))},
+        asr_checkpoint_receipts_scope='unpooled diagnostic snapshots with their own settings/scoring; canonical asr records use asr_settings and the plain scorer without gateway normalization',
         code_provenance_scope='repository script contents at report generation; per-ASR audio/settings hashes remain in ASR records',
         code_provenance=[dict(path=str(p.relative_to(repository)),sha256=sha256(p)) for p in code_paths if p.is_file()],
         acoustics=load(root/'acoustics/results.json'),
@@ -213,6 +215,7 @@ def generate(root,output,hash_checkpoints=True):
                   root/'prepared/audit.json',root/'cpu-check.json',root/'operations/baseline.json',root/'operations/restored.json',
                   root/'operations/gpu-window.json',root/'evaluations/checkpoint-manifest.json',root/'evaluations/block-streaming.json',root/'asr/results.json']
     source_paths.extend([root/'acoustics/results.json',root/'asr/settings.json'])
+    source_paths.extend((root/'asr').glob('pilot-epoch-*.json'))
     source_paths.extend([root/'report/qwen-standard-proxy.json',root/'listening/browser-playback-receipt.json',
                          root/'recompute_qwen_pcm.py'])
     source_paths.extend(root.glob('benchmark-*.json'))

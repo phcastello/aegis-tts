@@ -1,6 +1,6 @@
 # AegisVoice v2 — execução de fine-tuning em 02/11/2026
 
-Estado deste registro: preparação CPU, piloto de três épocas e seis épocas de
+Estado deste registro: preparação CPU, piloto de três épocas e doze épocas de
 treinamento concluídos; treinamento completo em andamento após a retomada de
 uma falha recuperável no hook de avaliação.
 Avaliações CUDA finais e restauração definitiva ainda estão pendentes.
@@ -135,9 +135,22 @@ para **0,597315**, melhoria de aproximadamente **23,8%** no objetivo CFM.
 | 4 | 516 | 0,669986 | 0,593350 |
 | 5 | 645 | 0,657427 | 0,590924 |
 | 6 | 774 | 0,655744 | 0,587778 |
+| 7 | 903 | 0,651552 | 0,586404 |
+| 8 | 1.032 | 0,654430 | 0,584650 |
+| 9 | 1.161 | 0,654888 | 0,583988 |
+| 10 | 1.290 | 0,661020 | 0,582228 |
+| 11 | 1.419 | 0,647378 | 0,580772 |
+| 12 | 1.548 | 0,650571 | 0,579771 |
 
-Até a sexta época, foram concluídos **774 updates**, com melhoria de
-**25,04%** na validação em relação à base. O treinamento completo continua.
+Até a época doze, foram concluídos **1.548 updates**, com validação
+**0,579770833**, melhoria de **26,06%** em relação à base. O checkpoint
+intermediário dessa época foi preservado. A fase completa continua na época
+treze: a paciência estava em uma avaliação, sem redução do LR por platô. A
+época doze é o mínimo inicial para aplicar critérios de convergência, sem
+constituir uma meta de encerramento. Nenhuma busca extra de hiperparâmetros
+foi iniciada com base nesses dois áudios.
+
+Na sexta época, foram concluídos 774 updates, com melhoria de 25,04%.
 No hook NFE 16 da época seis, as disponibilidades de PCM completo foram
 1,859 s para `novel_short` e 1,976 s para `aegis_command`, com RTF 0,454 e
 0,491. São chamadas no processo de treino, com os estados do treinamento
@@ -155,12 +168,36 @@ latência a partir desses números. O relatório mantém separadamente
 `ttfa_ms`, `first_pcm_ms`, `onset_audio_offset_ms` e
 `estimated_first_audible_playback_ms`, conservando os recibos individuais.
 
-O ASR CPU `faster-whisper-small`, int8, quatro threads, idioma português,
+Na sexta época, o ASR CPU `faster-whisper-small`, int8, quatro threads, idioma português,
 beam cinco, temperatura zero e sem VAD transcreveu `novel_short` com a
 sequência “e um”, mas registrou `Joana` como `juana`: WER de 9,09%. No comando,
 registrou `Agis, confir no registro...`, WER de 33,33%. Esses dois áudios não
 são suficientes para concluir a qualidade da voz, a pronúncia de Aegis ou o
 comportamento de textos longos. A candidata continua sem aprovação auditiva.
+
+No checkpoint doze, os mesmos textos foram sintetizados com o prompt 0586,
+NFE 16, seed `40733133` e repetição zero, mantendo a comparação com as épocas
+três e seis. `novel_short` foi transcrito integralmente pelo ASR, WER de 0%; o
+comando preservou toda a sequência, com `Aegis` reconhecido como `Agis`, WER
+de 11,11%. A divergência `confir no` da época seis não apareceu nesse áudio.
+
+| Frase fixa | WER época 3 | WER época 6 | WER época 12 |
+| --- | ---: | ---: | ---: |
+| `novel_short` | 18,18% | 9,09% | 0,00% |
+| `aegis_command` | 11,11% | 33,33% | 11,11% |
+
+O recibo suplementar da época doze usa o mesmo modelo/decodificação e dois
+threads CPU; a reexecução canônica com quatro threads confirmou WER de 0% e
+11,11%, reutilizando o cache das observações anteriores. Os recibos e
+configurações permanecem separados no relatório, sem agrupar WER de políticas
+diferentes. Essa comparação de duas frases não aprova a
+voz nem caracteriza comportamento em frases longas. A redução de WER não é
+usada isoladamente como critério de parada ou mudança de hiperparâmetros.
+
+No hook da época doze, o buffer completo ficou disponível em 1,917 s e
+1,792 s, com RTF 0,468 e 0,446, respectivamente. Os inícios estimados de
+reprodução FIFO são 2,337 s e 2,182 s. Continuam medições no processo de treino,
+sem HTTP, com a mesma distinção de métodos descrita acima.
 
 A comparação ASR usa somente NFD, remoção de acentos, casefold e separação
 de pontuação/espaços. Não aplica o léxico ou o frontend da produção. Os
@@ -215,6 +252,9 @@ Na época seis, essas mesmas frases apresentaram medianas YIN de 208,98 Hz e
 208,40 Hz, respectivamente: diferenças de -0,96 Hz e -2,33 Hz em relação à
 época três. São mudanças descritivas das amostras, sem comprovação de qualidade
 ou fidelidade da identidade.
+Na época doze, as medianas das mesmas frases foram 208,90 Hz e 208,55 Hz,
+respectivamente. Os gráficos foram atualizados com as três observações por
+frase, mantendo os descritores como auxiliares da escuta.
 
 Nos três roundtrips Vocos já disponíveis, a mediana YIN mudou de -3,93 a +0,55 Hz,
 o RMS de -0,42 a -0,05 dB e o centroide de -1,22 a +28,45 Hz na análise comum
@@ -317,13 +357,15 @@ agregado conserva ausências como pendências, sem inventar métricas.
 Testes CPU desta preparação: dez casos do limite de extração em
 `tests/test_f5_preparation.py` passaram, incluindo caminhos maliciosos, symlinks,
 hash incorreto, destinos duplicados, CRC corrompido e permissões privadas.
-Cinco regressões adicionais em `tests/test_f5_report.py` passaram: soma das
+Seis regressões adicionais em `tests/test_f5_report.py` passaram: soma das
 indisponibilidades de duas janelas, escolha da restauração mais recente e
 manutenção da pendência enquanto uma retomada está ativa; um manifesto acústico
 também não pode satisfazer a pendência do pacote auditivo. A estimativa YIN foi
 conferida com seno sintético de 150 Hz e silêncio (sem frames ativos).
 O teste de latência confirma que disponibilidade do buffer e reprodução
 estimada continuam separadas, sem alterar os recibos individuais.
+Recibos opcionais do proxy Qwen e da reprodução no navegador permanecem
+ausentes até serem criados, sem fabricar resultados.
 As avaliações CUDA
 finais, o tempo total de indisponibilidade, os checkpoints selecionados, as
 métricas finais e os commits serão registrados após a execução.

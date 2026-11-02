@@ -75,7 +75,20 @@ def save_audio(path, values):
     sf.write(path,values,RATE,subtype='FLOAT')
     return dict(path=str(path),sha256=digest(path),audio_seconds=len(values)/RATE,peak=float(abs(values).max()),outside_unit=int((abs(values)>1).sum()))
 
-def synthesize(model,v,root,label,cases,nfes,repeats=1):
+def word_rate_duration(reference_frames, text, wpm, max_seconds=90):
+    """Neural duration budget only; no stretching or other audio processing."""
+    import math
+    words=len(text.split())
+    if not words or not math.isfinite(wpm) or wpm<=0:
+        raise ValueError('nonempty text and finite positive word rate required')
+    # Vocos produces (mel_frames-1)*hop samples. Keep the conditioning span
+    # unchanged and quantize only the generated waveform duration to one hop.
+    frames=reference_frames+round(words*60/wpm*RATE/HOP)+1
+    if frames*HOP/RATE>max_seconds:
+        raise ValueError('word-rate duration exceeds declared maximum')
+    return frames
+
+def synthesize(model,v,root,label,cases,nfes,repeats=1,target_wpm=None):
     import torch
     import numpy as np
     from f5_tts.model.utils import convert_char_to_pinyin
@@ -93,6 +106,8 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1):
                 tokens=convert_char_to_pinyin([ref_text+case['text'].lower()])
                 oov=sorted({c for c in tokens[0] if c not in model.vocab_char_map})
                 duration=duration_frames(frames,ref_text,case['text'].lower(),90)
+                if target_wpm is not None:
+                    duration=word_rate_duration(frames,case['text'],target_wpm)
                 torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats();start=time.perf_counter()
                 with torch.inference_mode(),torch.autocast('cuda',dtype=torch.bfloat16):
                     generated,trajectory=model.sample(cond=cond,text=tokens,duration=duration,steps=nfe,cfg_strength=2.0,sway_sampling_coef=-1.0,seed=40733133+rep,use_epss=False)
@@ -102,7 +117,11 @@ def synthesize(model,v,root,label,cases,nfes,repeats=1):
                 torch.cuda.synchronize()
                 values=wave[0].float().cpu().numpy()
                 elapsed=time.perf_counter()-start
-                row=dict(label=label,case=case['id'],text=case['text'],effective_text=case['text'].lower(),nfe=nfe,repetition=rep,seed=40733133+rep,oov_tokens=oov,cold_generation=not records,reference_cache_hit=True,
+                first_for_model=not getattr(model,'_aegis_has_synthesized',False)
+                model._aegis_has_synthesized=True
+                row=dict(label=label,case=case['id'],text=case['text'],effective_text=case['text'].lower(),nfe=nfe,repetition=rep,seed=40733133+rep,oov_tokens=oov,cold_generation=first_for_model,first_in_evaluation=not records,reference_cache_hit=True,
+                    cold_generation_scope='first synthesis for this model object; CUDA runtime may already be warm',
+                    duration_policy='training-global word rate; exploratory neural duration control' if target_wpm else 'upstream UTF8 byte-ratio heuristic',target_wpm=target_wpm,
                     diffusion_seconds=diffusion,total_seconds=elapsed,ttfa_ms=elapsed*1000,rtf=elapsed/(len(values)/RATE),
                     streaming='whole utterance; no PCM before complete ODE+Vocos',resident_allocated_mib=torch.cuda.memory_allocated()/2**20,
                     peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,
@@ -190,7 +209,13 @@ def final(root):
         rows=synthesize(model,v,root,label,cases,[8,16,32],repeats=2 if label=='best' else 1)
         summaries.append(dict(label=label,checkpoint=str(p),sha256=digest(p),rows=len(rows),load=load_evidence))
         if label in ('base','best'):heldout(model,root,label)
-        if label=='best':block_streaming(model,v,root)
+        if label=='best':
+            block_streaming(model,v,root)
+            # One controlled cadence comparison motivated by the approved
+            # corpus rate. Main 8/16/32 measurements retain the byte heuristic.
+            train=[json.loads(line) for line in (root/'prepared/train.jsonl').read_text().splitlines()]
+            wpm=60*sum(len(row['text'].split()) for row in train)/sum(row['duration'] for row in train)
+            synthesize(model,v,root,'best-training-tempo',[corpora()[0],corpora()[-1]],[16],target_wpm=wpm)
         del model,v;gc.collect();torch.cuda.empty_cache()
     write_json(root/'evaluations/checkpoint-manifest.json',summaries)
 

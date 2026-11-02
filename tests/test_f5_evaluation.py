@@ -106,3 +106,13 @@ def test_local_helpers_ignore_unrelated_benchmarks_package(monkeypatch):
     expected = Path(__file__).resolve().parents[1] / 'benchmarks' / 'architecture_compare'
     assert Path(inspect.getfile(local_duration)).parent == expected
     assert Path(inspect.getfile(local_metrics)).parent == expected
+
+
+def test_word_rate_changes_only_neural_duration_budget():
+    frames = evaluate.word_rate_duration(947, 'A gaveta azul contém três chaves e um bilhete de Joana.', 124.60845)
+    audio_seconds = (frames - 947 - 1) * evaluate.HOP / evaluate.RATE
+    assert abs(audio_seconds - 11 * 60 / 124.60845) <= evaluate.HOP / evaluate.RATE / 2
+    with pytest.raises(ValueError):
+        evaluate.word_rate_duration(947, '', 124.6)
+    with pytest.raises(ValueError, match='maximum'):
+        evaluate.word_rate_duration(947, 'uma palavra ' * 500, 124.6)
