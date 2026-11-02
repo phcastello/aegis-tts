@@ -154,6 +154,7 @@ def collect(root):
         acoustics=load(root/'acoustics/results.json'),
         qwen_standard_proxy=load(root/'report/qwen-standard-proxy.json'),
         browser_playback=load(root/'listening/browser-playback-receipt.json'),
+        tempo_comparison_plan=load(root/'tempo-comparison-plan.json'),
         operation=operation,
         listening_manifests=[dict(path=str(p),sha256=sha256(p)) for p in package_manifests],
         package_archives=[dict(path=str(p),bytes=p.stat().st_size,sha256=sha256(p)) for p in sorted(root.glob('*.zip'))],
@@ -217,7 +218,7 @@ def generate(root,output,hash_checkpoints=True):
     source_paths.extend([root/'acoustics/results.json',root/'asr/settings.json'])
     source_paths.extend((root/'asr').glob('pilot-epoch-*.json'))
     source_paths.extend([root/'report/qwen-standard-proxy.json',root/'listening/browser-playback-receipt.json',
-                         root/'recompute_qwen_pcm.py'])
+                         root/'recompute_qwen_pcm.py',root/'tempo-comparison-plan.json'])
     source_paths.extend(root.glob('benchmark-*.json'))
     for directory in [root/'operations',*sorted(root.glob('operations-resume-*'))]:
         source_paths.extend(directory/name for name in ('baseline.json','restored.json','gpu-window.json'))

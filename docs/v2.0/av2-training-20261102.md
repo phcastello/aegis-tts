@@ -1,6 +1,6 @@
 # AegisVoice v2 — execução de fine-tuning em 02/11/2026
 
-Estado deste registro: preparação CPU, piloto de três épocas e doze épocas de
+Estado deste registro: preparação CPU, piloto de três épocas e vinte e duas épocas de
 treinamento concluídos; treinamento completo em andamento após a retomada de
 uma falha recuperável no hook de avaliação.
 Avaliações CUDA finais e restauração definitiva ainda estão pendentes.
@@ -141,10 +141,26 @@ para **0,597315**, melhoria de aproximadamente **23,8%** no objetivo CFM.
 | 10 | 1.290 | 0,661020 | 0,582228 |
 | 11 | 1.419 | 0,647378 | 0,580772 |
 | 12 | 1.548 | 0,650571 | 0,579771 |
+| 16 | 2.064 | 0,640273 | 0,576533 |
+| 22 | 2.838 | 0,659611 | 0,573859 |
 
-Até a época doze, foram concluídos **1.548 updates**, com validação
+A tabela mostra as épocas iniciais e marcos posteriores; `loss-history.json`
+e a curva privada conservam todas as avaliações. Na época **22**, foram
+concluídos **2.838 updates**, com validação **0,573859398**, melhoria de
+**26,82%** em relação à base. O learning rate recebeu a **única redução
+prevista, por fator 0,3**, após seis avaliações sem superar o ganho relativo
+de 0,5% desde a última melhoria relevante. A melhor loss absoluta ainda vinha
+caindo lentamente; isso não equivale a uma deterioração generalizada.
+
+A paciência foi reiniciada e a fase completa prossegue na época 23, observando
+a resposta à redução. O treinamento **ainda não terminou**: um novo platô
+persistente após essa redução poderá encerrar por convergência conforme a
+regra inicial. O valor baixo do learning rate, o número de épocas ou os
+indicadores auxiliares isolados não determinam o encerramento.
+
+Ao término da época doze, foram concluídos **1.548 updates**, com validação
 **0,579770833**, melhoria de **26,06%** em relação à base. O checkpoint
-intermediário dessa época foi preservado. A fase completa continua na época
+intermediário dessa época foi preservado. A fase completa prosseguiu na época
 treze: a paciência estava em uma avaliação, sem redução do LR por platô. A
 época doze é o mínimo inicial para aplicar critérios de convergência, sem
 constituir uma meta de encerramento. Nenhuma busca extra de hiperparâmetros
@@ -181,10 +197,16 @@ três e seis. `novel_short` foi transcrito integralmente pelo ASR, WER de 0%; o
 comando preservou toda a sequência, com `Aegis` reconhecido como `Agis`, WER
 de 11,11%. A divergência `confir no` da época seis não apareceu nesse áudio.
 
-| Frase fixa | WER época 3 | WER época 6 | WER época 12 |
-| --- | ---: | ---: | ---: |
-| `novel_short` | 18,18% | 9,09% | 0,00% |
-| `aegis_command` | 11,11% | 33,33% | 11,11% |
+| Frase fixa | WER época 3 | WER época 6 | WER época 12 | WER época 22 |
+| --- | ---: | ---: | ---: | ---: |
+| `novel_short` | 18,18% | 9,09% | 0,00% | 0,00% |
+| `aegis_command` | 11,11% | 33,33% | 11,11% | 11,11% |
+
+Na época 22, a reexecução ASR canônica de quatro threads confirmou novamente
+essas duas transcrições: a primeira frase coincide integralmente; o comando
+continua com `Aegis` reconhecido como `Agis`. Foram reutilizados 15 registros
+anteriores e computados somente os dois novos. O resultado não resolve a
+pronúncia desejada do nome, que permanece para escuta do proprietário.
 
 O recibo suplementar da época doze usa o mesmo modelo/decodificação e dois
 threads CPU; a reexecução canônica com quatro threads confirmou WER de 0% e
@@ -255,6 +277,17 @@ ou fidelidade da identidade.
 Na época doze, as medianas das mesmas frases foram 208,90 Hz e 208,55 Hz,
 respectivamente. Os gráficos foram atualizados com as três observações por
 frase, mantendo os descritores como auxiliares da escuta.
+Na época 22, foram 209,18 Hz e 209,46 Hz. O arquivo acústico agora acompanha
+quatro checkpoints representativos, sem atribuir aprovação vocal às diferenças.
+
+Foi planejada uma única comparação final adicional: no melhor checkpoint,
+NFE 16 e duas frases fixas, derivar a duração da saída neural da média ponderada
+de **124,60845 palavras/minuto** do treino. O benchmark principal continua com
+a regra upstream baseada em bytes UTF-8 e NFE 8/16/32. O plano está em
+`tempo-comparison-plan.json` e não modifica waveform, velocidade por efeito,
+pitch ou demais efeitos. Palavras de comprimentos diferentes e pontuação
+alteram naturalmente a contagem por minuto; a variante não pressupõe erro de
+ritmo no treinamento nem inicia uma busca de combinações.
 
 Nos três roundtrips Vocos já disponíveis, a mediana YIN mudou de -3,93 a +0,55 Hz,
 o RMS de -0,42 a -0,05 dB e o centroide de -1,22 a +28,45 Hz na análise comum
