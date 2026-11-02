@@ -241,27 +241,39 @@ def asr(root):
     from scipy.signal import resample_poly
     from faster_whisper import WhisperModel
     from scripts.dataset_content_audit import comparison
-    model=WhisperModel(str(OLD/'asr/model'),device='cpu',compute_type='int8',cpu_threads=2,num_workers=1,local_files_only=True)
+    settings=dict(repository='Systran/faster-whisper-small',revision='536b0662742c02347bc0e980a01041f333bce120',device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,language='pt',beam_size=5,temperature=0,vad_filter=False,condition_on_previous_text=False,resampling='scipy resample_poly Kaiser10 to16k; no gain or trimming')
+    settings_hash=hashlib.sha256(json.dumps(settings,sort_keys=True).encode()).hexdigest()
+    write_json(root/'asr/settings.json',dict(settings=settings,sha256=settings_hash,model_receipt_sha256=digest(OLD/'asr/download-receipt.json')))
+    model=WhisperModel(str(OLD/'asr/model'),device='cpu',compute_type='int8',cpu_threads=4,num_workers=1,local_files_only=True)
     def transcribe(path):
         audio,rate=sf.read(path,dtype='float32')
         d=math.gcd(rate,16000)
         audio=resample_poly(audio,16000//d,rate//d,window=('kaiser',10)).astype(np.float32)
         seg,_=model.transcribe(audio,language='pt',beam_size=5,temperature=0,vad_filter=False,condition_on_previous_text=False)
         return ' '.join(s.text.strip() for s in seg)
+    result_path=root/'asr/results.json'
+    old_records=json.loads(result_path.read_text()) if result_path.exists() else []
+    cache={r['cache_key']:r for r in old_records if r.get('settings_sha256')==settings_hash and r.get('cache_key')}
     records=[]
+    def check(source,metadata):
+        sha=digest(source)
+        key=hashlib.sha256(json.dumps([metadata,sha,settings_hash],sort_keys=True).encode()).hexdigest()
+        if key in cache:record=cache[key]
+        else:
+            started=time.perf_counter();text=transcribe(source)
+            record=dict(**metadata,hypothesis=text,audio_sha256=sha,settings_sha256=settings_hash,cache_key=key,seconds=time.perf_counter()-started,**comparison(metadata['reference'],text))
+        records.append(record);write_json(result_path,records)
+        print(json.dumps({k:record[k] for k in ('label','case','word_error_rate')},ensure_ascii=False),flush=True)
     for p in sorted((root/'evaluations').glob('*/*.json')):
         if p.name in ('results.json','reference.json'):continue
         row=json.loads(p.read_text())
         if not isinstance(row,dict) or not row.get('path') or not row.get('text'):continue
-        text=transcribe(row['path'])
-        records.append(dict(label=row['label'],case=row['case'],nfe=row['nfe'],repetition=row['repetition'],reference=row['text'],hypothesis=text,**comparison(row['text'],text)))
-        write_json(root/'asr/results.json',records)
-    for p in (root/'roundtrip').glob('*/results.json'):
+        check(row['path'],dict(label=row['label'],case=row['case'],nfe=row['nfe'],repetition=row['repetition'],reference=row['text']))
+    for p in sorted((root/'roundtrip').glob('*/results.json')):
         row=json.loads(p.read_text())
         for name,source in [('original',p.parent/'A-original-treated.wav'),('converted',p.parent/'B-input-24000.wav'),('vocos',p.parent/'C-vocos-24000.wav')]:
-            text=transcribe(source)
-            records.append(dict(label='roundtrip-'+name,case=row['id'],reference=row['text'],hypothesis=text,**comparison(row['text'],text)))
-    write_json(root/'asr/results.json',records)
+            check(source,dict(label='roundtrip-'+name,case=row['id'],reference=row['text']))
+    write_json(result_path,records)
 
 def package(root):
     dest=root/'listening';dest.mkdir(parents=True,exist_ok=True)
