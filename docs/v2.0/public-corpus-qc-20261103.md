@@ -32,6 +32,7 @@ novas dos autores. A atribuição completa e as mudanças ficam em
 | --- | ---: | ---: | ---: |
 | Preparação inicial | 3.044 / 8,074922 h | 174 / 0,414256 h | 177 / 0,504197 h |
 | FastPitch após excluir transcrição ambígua `sample-828` | **3.043 / 8,073747 h** | 174 / 0,414256 h | 177 / 0,504197 h |
+| FastPitch congelado após auditoria de duplicatas/conflitos | **3.037 / 8,054236 h** | **172 / 0,405361 h** | não aberto neste estágio |
 | VITS após quarentena adicional de frontend | 3.026 / 8,012392 h | 172 / 0,405361 h | 177 / 0,504197 h |
 
 *Contagens do manifesto de seleção já registrado; o QC abaixo não abriu nem
@@ -95,3 +96,18 @@ partição, quartil, critérios e hashes, SHA-256
 `ca84ff7a4fb6c6912b01c08e84df6f37d856a494245715ad2f97554539b2bc48`.
 A seleção dos dados e o QC podem ser repetidos com `jobs.json` e
 `benchmarks/v2/asr_score.py` no ambiente F5 documentado.
+
+
+Atualização12:59UTC: a linha FastPitch longa usa a última seleção da tabela,
+congelada antes do treino. A auditoria encontrou linhas com IDs/textos
+conflitantes e duplicatas adicionais; o cache inicial foi desqualificado.
+Foram quarentenados47/70/1430/828 e agrupadas/deduplicadas as falas2142/2252,
+sem alterar os arquivos originais. `portuguese/fastpitch-input-v1` e
+`fastpitch/portuguese-features-clean-v1/qualification.json` fixam manifestos
+e hashes. A contagem de cobertura acima pertence à seleção anterior.
+Na seleção limpa efetivamente treinada. uma nova contagem por sequências de letras
+Unicode/casefold produziu 55.892 ocorrências e 11.169 tipos;
+marcas ortográficas: ã 2090, õ 436, ç 1803, nh 556, lh 511, rr 465, ss 1173.
+Continuam sendo indícios escritos, sem aprovação fonética. O recibo privado
+`portuguese/fastpitch-clean-coverage.json` registra a regra e o manifesto;
+nenhum áudio/texto do teste foi aberto para esta contagem.
