@@ -255,8 +255,13 @@ class AudioCache:
         if rate!=22050:
             divisor=math.gcd(rate,22050);audio=resample_poly(audio,22050//divisor,rate//divisor,window=('kaiser',10)).astype(np.float32)
         if np.abs(audio).max()>1:raise ValueError('input resample overshoot; no clipping')
-        wave=t.from_numpy(audio.copy())
-        spec=self.b.mel.spectrogram_torch(wave[None],1024,22050,256,1024,center=False)[0]
+        # Persistent data/STFT caches must remain ordinary tensors even when a
+        # diagnostic caller happens to use inference_mode. Training backward
+        # saves these constants/inputs for gradients with respect to weights.
+        with t.inference_mode(False),t.no_grad():
+            wave=t.from_numpy(audio.copy())
+            spec=self.b.mel.spectrogram_torch(wave[None],1024,22050,256,1024,center=False)[0]
+        if wave.is_inference() or spec.is_inference():raise RuntimeError('inference tensor escaped into persistent audio cache')
         if spec.shape[1]<len(row['_ids']) or spec.shape[1]<32:raise ValueError('audio too short for MAS/32frame segment')
         value=(wave,spec);size=sum(x.numel()*x.element_size() for x in value)
         while self.items and self.bytes+size>self.limit:
@@ -341,7 +346,10 @@ def audio_artifact(path,values,b):
 
 def validation(b,rows,cache,limit):
     values=[];training=b.g.training
-    with preserve_rng(b,40733133),b.torch.inference_mode():
+    # Upstream mel_processing caches Hann windows and mel bases globally.
+    # no_grad preserves their ability to participate in later training graphs;
+    # inference_mode would poison a fresh process during initial validation.
+    with preserve_rng(b,40733133),b.torch.no_grad():
         b.g.eval()
         try:
             for row in rows[:limit]:

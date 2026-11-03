@@ -102,6 +102,43 @@ class Recovery(unittest.TestCase):
         self.assertEqual(actual.argmax(2).tolist(),[[0,0,1,1,2,2]])
         with self.assertRaisesRegex(ValueError,'dimensions'):mas.maximum_path(self.t.ones(1,2,3),self.t.ones(1,2,3))
 
+    def mel_module(self):
+        path=Path('/var/tmp/aegis-v2-work/piper/deps/piper/train/vits/mel_processing.py')
+        if not path.exists():self.skipTest('pinned Piper mel source unavailable')
+        self.assertEqual(piper.sha(path),'86e2236d081ec1298cdfd85dcd166f654088edf4cd48c98b700bf77fccd86fc9')
+        spec=importlib.util.spec_from_file_location('piper_mel_regression_fixture',path)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+
+    def test_real_validation_mel_cache_warmup_then_training_backward(self):
+        """Reproduce084 with real STFT, then exercise the corrected val context."""
+        t=self.t;mel=self.mel_module();audio=(t.sin(t.arange(8192)*.017)*.1)[None]
+        def render(value):return mel.mel_spectrogram_torch(value,1024,80,22050,256,1024,0.,None)
+        with t.inference_mode():render(audio)
+        self.assertTrue(any(v.is_inference() for v in mel.hann_window.values()))
+        with self.assertRaisesRegex(RuntimeError,'Inference tensors cannot be saved for backward'):
+            render(audio.clone().requires_grad_(True)).mean().backward()
+        mel.hann_window.clear();mel.mel_basis.clear()
+        backend=SimpleNamespace(torch=t,np=self.np,device='cpu',g=t.nn.Identity())
+        with patch.object(piper,'make_batch',return_value=audio),patch.object(piper,'acoustic_forward',side_effect=lambda b,x:(None,None,render(x).mean())):
+            value=piper.validation(backend,[dict(id='reserved')],None,1)
+        self.assertTrue(self.np.isfinite(value));self.assertTrue(backend.g.training)
+        self.assertFalse(any(v.is_inference() for v in (*mel.hann_window.values(),*mel.mel_basis.values())))
+        generated=audio.clone().requires_grad_(True);render(generated).mean().backward()
+        self.assertTrue(bool(t.isfinite(generated.grad).all()));self.assertGreater(float(generated.grad.abs().sum()),0.)
+
+    def test_audio_cache_created_inside_inference_context_remains_autograd_usable(self):
+        import soundfile as sf
+        t=self.t;mel=self.mel_module();backend=SimpleNamespace(torch=t,np=self.np,device='cpu',mel=mel)
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'source.wav';sf.write(path,self.np.sin(self.np.arange(8192)*.017).astype('float32')*.1,22050,subtype='PCM_16')
+            row=dict(id='fixture',audio_filepath=str(path),sha256=piper.sha(path),_ids=[1,0,14,0,2]);cache=piper.AudioCache(backend,1)
+            with t.inference_mode():wave,spec=cache.get(row)
+            self.assertFalse(wave.is_inference());self.assertFalse(spec.is_inference())
+            self.assertFalse(any(v.is_inference() for v in mel.hann_window.values()))
+            again=cache.get(row);self.assertEqual(again[1].data_ptr(),spec.data_ptr())
+            layer=t.nn.Conv1d(513,2,1);layer(spec[None]).sum().backward()
+            self.assertTrue(bool(t.isfinite(layer.weight.grad).all()));self.assertGreater(float(layer.weight.grad.abs().sum()),0.)
+
 @unittest.skipUnless(importlib.util.find_spec('numpy') and importlib.util.find_spec('soundfile'),'audio CPU dependencies unavailable')
 class AudioQC(unittest.TestCase):
     def test_diagnostic_audio_keeps_onset_offsets_without_fictitious_latency(self):

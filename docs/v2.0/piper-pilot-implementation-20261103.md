@@ -1,5 +1,7 @@
 # Piper Cadu: implementação pronta para o piloto isolado
 
+Atualização posterior:084 falhou antes do update1;085 retomou o inicial0 e avançou0→4. A prova nativa3→4 continua aberta. A correção de contexto/cache e o novo piloto estão em [piper-autograd-cachefix-20261103.md](piper-autograd-cachefix-20261103.md). Os números CPU abaixo pertencem à implementação inicial.
+
 `training/v2_piper_experiment.py`, SHA256`71309a7198136d4fe00e9eff0e968cf46db00a59fa91df82eb40e1b18da787e2`, implementa `fetch`, `prepare`, `check`, `reconstruct`, `pilot`, `train` e `infer`. Não usa Lightning. Reutiliza fonte Piper1.8 fixada, os modelos/losses originais e a MAS CP312 existente com transposição conferida. Todos os pesos G+D são exigidos; uma nova especialização inicia Adam/schedulers/RNG/contadores novos. A própria retomada restaura dois Adam, dois schedulers, scaler desativado FP32, RNG Python/NumPy/TorchCPU/CUDA, época, permutação, próximo cursor, contador de pares completos e configuração/hashes. O checkpoint contém hparams e redes completos e permite retomar sem reler a base pública.
 
 O checkpoint Cadu original foi baixado uma vez, em32,55s, com845.888.150bytes e SHA256`abd3e6c7237aca5b7cf9c3cfc50945bfef44a83a594e00186f584d9d11fd355a`. Houve hash durante download, releitura local, fsync e publicação atômica. Arquivo: `/var/tmp/aegis-v2-work/piper/downloads/pt_BR-cadu-medium.ckpt`; receipt:`piper/full-download-receipt.json`. Pesos são privados para pesquisa; a ressalva da linhagem Lessac permanece e nenhum upload foi feito.
