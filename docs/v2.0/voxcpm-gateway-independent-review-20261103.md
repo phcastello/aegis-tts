@@ -34,3 +34,26 @@ WAV completo, PCM em streaming, cancelamento e a matriz comum do gateway.
 Recibo privado com hashes de todos os arquivos e limites da revisão:
 `/var/tmp/aegis-v2-work/voxcpm2/aegis-lora-preparation/gateway-independent-review.json`.
 Nenhum arquivo da integração, serviço, fila ou peso foi alterado pelo revisor.
+
+A revisão final do executor foi concluída sobre o freeze conservado em
+`voxcpm-gateway/preparation/code-freeze.json`: runtime `b2fe4fa9…`, gateway
+`19dbcdea…` e runner `fbce3041…`. Os guards finais agora publicam falha se
+limpeza, código ou checkpoint divergirem. TERM/INT seguem saída controlada;
+na janela de criação do filho, o handler do chamador apenas adia a entrega
+até registrar Popen/PID/start/UID, sem bloquear a máscara herdada por uvicorn.
+O benchmark também exige status completed de cada request_id, para recusar
+um prefixo PCM reproduzível cuja geração falhou após HTTP200.
+
+A instrumentação de replays é opt-in, conserva a função original e a
+restaura no encerramento. O frontend refinado tem perfil/header e texto
+ASR efetivo separados; original NFC segue padrão experimental e Qwen
+continua padrão global. Os testes informados pelo autor e seus hashes estão
+no recibo final, distinguindo-os das provas stdlib executadas pelo revisor.
+Nenhum impedimento restante foi identificado para o probe exclusivo.
+
+Após a janela autorizada, os dois result.json HTTP400 do operador foram
+conferidos: PASS, checkpoint/código intactos e servidor encerrado. Essa é
+execução do operador, sem atribuir ao revisor medição GPU ou aprovação da
+voz. Não foi feita outra revisão extensa nem alteração do runtime.
+Recibo de seguimento:
+`/var/tmp/aegis-v2-work/voxcpm2/aegis-lora-preparation/gateway-probe-independent-review.json`.
