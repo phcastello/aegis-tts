@@ -172,14 +172,14 @@ def private_output(value):
 
 def run(args):
     os.umask(0o077);endpoint(args.endpoint)
-    corpus=HERE/('test.pt-BR.json' if args.final_test else 'validation.pt-BR.json')
-    cases=json.loads(corpus.read_text())
     if args.final_test:
         if not args.decision:raise ValueError('final test requires pre-recorded --decision file')
         decision=json.loads(Path(args.decision).read_text())
         required={'material_ttfa_gain_ms','max_wer_regression_pp','identity_rejection_rule','selected_candidate','validation_evidence'}
         if not required<=decision.keys():raise ValueError('decision file lacks: '+str(sorted(required-decision.keys())))
         if decision['selected_candidate']!=args.candidate:raise ValueError('decision candidate mismatch')
+    corpus=HERE/('test.pt-BR.json' if args.final_test else 'validation.pt-BR.json')
+    cases=json.loads(corpus.read_text())
     if args.case:cases=[c for c in cases if c['id'] in args.case]
     if not cases:raise ValueError('no selected cases')
     out=private_output(args.output);snapshot=gpu_snapshot() if args.sample_gpu or args.expected_pids else None
