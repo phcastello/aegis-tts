@@ -26,7 +26,14 @@ def main():
     p.add_argument('--threads', type=int, default=2)
     p.add_argument('--candidate', default='vits-cv-pt-base')
     p.add_argument('--case', action='append')
+    p.add_argument('--noise-scale', type=float, default=None,
+                   help='Override native inference_noise_scale; omitted preserves model config')
+    p.add_argument('--duration-noise-scale', type=float, default=None,
+                   help='Override native inference_noise_scale_dp; omitted preserves model config')
     a = p.parse_args(); os.umask(0o077)
+    for value in (a.noise_scale,a.duration_noise_scale):
+        if value is not None and (not math.isfinite(value) or value < 0):
+            p.error('noise scales must be finite and nonnegative')
     a.output.mkdir(parents=True, mode=0o700, exist_ok=False)
     spec = importlib.util.spec_from_file_location('v2bench', vits.REPO/'benchmarks/v2/benchmark.py')
     b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
@@ -35,6 +42,11 @@ def main():
     started = time.perf_counter()
     torch, np, model, config, normalizer = vits.bootstrap(args)
     step = vits.load_trained(args, model, torch)
+    if a.noise_scale is not None:model.inference_noise_scale=a.noise_scale
+    if a.duration_noise_scale is not None:model.inference_noise_scale_dp=a.duration_noise_scale
+    sampling=dict(inference_noise_scale=float(model.inference_noise_scale),
+                  inference_noise_scale_dp=float(model.inference_noise_scale_dp),
+                  length_scale=float(model.length_scale))
     model.to(a.device).eval()
     if a.device == 'cuda': torch.cuda.synchronize()
     load_seconds = time.perf_counter() - started
@@ -47,6 +59,7 @@ def main():
                   checkpoint_sha256=vits.digest(a.checkpoint) if a.checkpoint else vits.BASE_SHA,
                   step=step, corpus_sha256=vits.digest(corpus), code_sha256=vits.digest(__file__),
                   engine_code_sha256=vits.digest(vits.__file__), load_seconds=load_seconds,
+                  sampling=sampling,requested_noise_overrides=dict(noise_scale=a.noise_scale,duration_noise_scale=a.duration_noise_scale),
                   format='PCM16LE mono 24000Hz', native_rate=22050, concurrency=1,
                   warmup='One non-corpus synthesis recorded separately before warm matrix; no slow call discarded',
                   normalization='f5-refinement-1 experimental PT-BR normalization, A-é-jis owner target; checkpoint graphemes',
@@ -74,7 +87,7 @@ def main():
                        condition='first-model-synthesis-warmup' if repetition == -1 else 'warm',
                        source_text=case['text'],effective_text=normalizer.normalize(case['text']).normalized_text.lower(),
                        scope='complete-file local engine including all conversion and WAV close; no HTTP',
-                       streaming='one complete file; no neural streaming',step=step,device=a.device)
+                       streaming='one complete file; no neural streaming',step=step,device=a.device,sampling=sampling)
             if not final.size or not np.isfinite(final).all() or np.abs(final).max() > 1:
                 import soundfile as sf
                 sf.write(a.output/f"{case['id']}-r{repetition:02d}-invalid.wav",final,24000,subtype='FLOAT')
