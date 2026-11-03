@@ -23,7 +23,8 @@ REPO=Path(__file__).resolve().parents[1]
 ROOT=Path('/var/tmp/aegis-v2-work')
 PYTHON='/var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python'
 CP_LIMIT=70*1024**2
-RESERVE=256*1024**2
+RESERVE=384*1024**2
+KEEP_CHECKPOINTS=3
 
 def sync_dir(path):
     fd=os.open(path,os.O_DIRECTORY)
@@ -103,6 +104,12 @@ def retention(jobs,best,training_best,active,keep=6):
     selected.update(j['key'] for j in jobs if j['step'] in (0,training_best))
     return selected|{k for k in (best,active) if k}
 
+def checkpoint_retention(jobs,best,best_checkpoint=None):
+    bound=[j for j in jobs if j.get('checkpoint') and not j.get('removed_utc')]
+    selected={j['key'] for j in sorted(bound,key=lambda j:(j['step'],j['key']))[-KEEP_CHECKPOINTS:]}
+    # Keep the recoverable best until a newly selected best obtains its exact link.
+    return selected|({best,best_checkpoint}&{j['key'] for j in bound})
+
 def freeze(source,target,corpus,spoken,policy):
     raw=source.read_bytes();data=json.loads(raw);rows=data['results'];source_jobs=(source.parent/'asr-jobs.json').read_bytes()
     declared=json.loads(source_jobs)['jobs'];ok={r['case']:r for r in rows if r.get('outcome')=='ok'}
@@ -140,7 +147,7 @@ class Monitor:
         self.policy['expected_nfe']=args.expected_nfe
         self.log=logging.getLogger('voxcpm-quality');self.log.setLevel(logging.INFO);self.log.addHandler(RotatingFileHandler(self.out/'monitor.log',maxBytes=1024**2,backupCount=1))
         write(self.out/'recipe.json',dict(utc=utc(),pid=os.getpid(),start_ticks=ticks(os.getpid()),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),command=sys.argv,code_sha256=sha(__file__),policy=self.policy,
-            run=str(self.run),poll_seconds=args.poll_seconds,child_poll_seconds=1,heartbeat_seconds=1800,timeout_active_seconds=args.timeout,keep_latest=6,checkpoint_limit_bytes=CP_LIMIT,estimated_extra_bytes=RESERVE,
+            run=str(self.run),poll_seconds=args.poll_seconds,child_poll_seconds=1,heartbeat_seconds=1800,timeout_active_seconds=args.timeout,keep_latest=6,keep_latest_exact_checkpoints=KEEP_CHECKPOINTS,checkpoint_limit_bytes=CP_LIMIT,estimated_extra_bytes=RESERVE,
             scope='CPU2 nice19 pinned/offline ASR only; seven-case denominator; eager NFE recorded per case; no product latency, listening, model approval or GPU control',pause_file=str(self.root/'pause-asr')))
         for path in self.probes.glob('step-*/source.json'):
             job=read(path)
@@ -204,17 +211,15 @@ class Monitor:
             except (FileNotFoundError,json.JSONDecodeError):continue
         self.capture_checkpoints();self.save()
     def capture_checkpoints(self):
-        # At most one unscored checkpoint plus the selected best-ASR state.
-        staged=any(j.get('checkpoint') and j['status'] in ('pending','running') for j in self.state['jobs'].values())
-        for job in sorted(self.state['jobs'].values(),key=lambda j:(j['key']!=self.state.get('best_asr'),j['step'])):
+        jobs=[j for j in self.state['jobs'].values() if not j.get('removed_utc')]
+        latest={j['key'] for j in sorted(jobs,key=lambda j:(j['step'],j['key']))[-KEEP_CHECKPOINTS:]}
+        for job in sorted(jobs,key=lambda j:(j['key']!=self.state.get('best_asr'),-j['step'],j['key'])):
             selected=job['key']==self.state.get('best_asr')
-            if job.get('checkpoint') or (job['status'] not in ('pending','running') and not selected):continue
-            if staged and not selected:continue
+            if job.get('checkpoint') or (job['key'] not in latest and not selected):continue
             target=Path(job['directory'])/'checkpoint.pt';binding=checkpoint(self.run,job['step'],target)
             if binding:
                 job['checkpoint']=binding;write(target.with_suffix('.sha256.json'),binding);sync_dir(target.parent)
                 if selected:self.state['best_checkpoint']=job['key']
-                else:staged=True
             elif selected and read(self.run/'last.sha256.json',{}).get('step',-1)>job['step'] and read(self.run/'best.sha256.json',{}).get('step')!=job['step']:
                 self.review('best_ASR_checkpoint_unavailable',step=job['step'],reason='Trainer receipts already advanced; no mismatched weights retained')
     def start(self):
@@ -272,19 +277,19 @@ class Monitor:
     def cleanup(self):
         if (self.root/'pause-asr').exists():return
         jobs=list(self.state['jobs'].values());keep=retention(jobs,self.state.get('best_asr'),read(self.run/'best.sha256.json',{}).get('step'),self.child['key'] if self.child else None)
-        if self.state.get('best_checkpoint'):keep.add(self.state['best_checkpoint'])
+        checkpoints=checkpoint_retention(jobs,self.state.get('best_asr'),self.state.get('best_checkpoint'));keep.update(checkpoints)
         for job in jobs:
             path=Path(job['directory'])
             if not path.exists():continue
             if path.is_symlink() or path.resolve().parent!=self.probes.resolve() or path.stat().st_uid!=os.getuid():raise ValueError('Unsafe cleanup path')
-            files=[str(p) for p in path.iterdir() if p.is_file()]
-            if files and subprocess.run(['fuser',*files],capture_output=True,timeout=10).returncode!=1:continue
-            # Completed nonselected checkpoints have no future use; WAV policy is independent.
-            if job['status'] in ('complete','failed') and job['key'] not in (self.state.get('best_asr'),self.state.get('best_checkpoint')):
+            files=[str(path)]+[str(p) for p in path.iterdir() if p.is_file()]
+            if subprocess.run(['fuser',*files],capture_output=True,timeout=10).returncode!=1:continue
+            # Keep latest exact validation weights independently of ASR rank/status.
+            if job.get('checkpoint') and job['key'] not in checkpoints:
                 (path/'checkpoint.pt').unlink(missing_ok=True);(path/'checkpoint.sha256.json').unlink(missing_ok=True);job.pop('checkpoint',None)
             if job['key'] in keep or job['status']=='running':continue
             allocated=physical_usage([path])['allocated_bytes'];shutil.rmtree(path);job.update(removed_utc=utc(),status='expired_unscored' if job['status']=='pending' else job['status'])
-            with (self.out/'cleanup.jsonl').open('a') as stream:stream.write(json.dumps(dict(utc=utc(),directory=str(path),allocated_bytes=allocated,reason='Outside latest6/initial/bestASR/training-best/active'))+'\n')
+            with (self.out/'cleanup.jsonl').open('a') as stream:stream.write(json.dumps(dict(utc=utc(),directory=str(path),allocated_bytes=allocated,reason='Outside latest6 audio/latest3 exact checkpoints/initial/bestASR/training-best/active'))+'\n')
     def shutdown(self):
         if self.child and owned(self.child):pause_child(self.child,True,force=True);write(self.out/'active.json',self.child)
         self.save()

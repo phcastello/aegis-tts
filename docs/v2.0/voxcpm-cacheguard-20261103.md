@@ -3,7 +3,9 @@
 Os dois probes HTTP com LoRA400 passaram pelos contratos e encerraram seus
 servidores, mas expuseram atraso fixo entre o motor e o áudio entregue. O
 diagnóstico e a correção abaixo mantêm checkpoint, modelo, BF16/FP32, KV1024,
-NFE10, seed, FIR e DSP. Ganho HTTP da correção ainda precisa ser confirmado.
+NFE10, seed, FIR e DSP. A repetição HTTP confirmou o ganho e a equivalência
+exata do áudio; os resultados e a política com320ms estão no
+[relatório de execução](voxcpm-gateway-execution-20261103.md).
 
 O caminho antigo chamava `cache_budget` duas vezes antes do primeiro `next`
 nativo e duas vezes no reset anterior ao EOF. Medição stdlib, sem modelo ou
@@ -65,7 +67,8 @@ O original teve horários ambíguos no reconhecimento, enquanto a expansão
 numérica expressou horas/minutos. Isso justifica um controle menor, sem tratar
 a transcrição ASR como avaliação auditiva confirmada.
 
-Próximo gate: mesmo LoRA400 congelado, `original-nfc` e `ptbr-numbers-v1` em
-runs novos, sete validações×3, somente três warmups de uma frase fora do corpus.
-Comparar primeira frase inédita após readiness, repetidas, gaps/RTF e contratos.
-O teste final continua fechado. Nenhum resultado desta nota aprova identidade.
+Esse gate foi concluído no mesmo LoRA400 congelado, com `original-nfc` e
+`ptbr-numbers-v1`, sete validações×3 por execução e somente três warmups de uma
+frase fora do corpus. Com reserva320ms,42/42 solicitações foram completas e sem
+lacunas. O frontend numérico teve TTFA mediano584,4ms e RTF longo0,717. O teste
+final continua fechado; identidade e pesos finais permanecem sem aprovação.

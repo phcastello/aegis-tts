@@ -1,9 +1,9 @@
 # Integração experimental VoxCPM2 no gateway
 
-Estado inicial: implementação e contratos CPU revisáveis. O operador concluiu
-depois os dois probes HTTP com checkpoint400 de engenharia e os encerrou. O
-runtime atual tem a [correção de orçamento e controle numérico](voxcpm-cacheguard-20261103.md),
-que aguarda nova medição HTTP. O treino LoRA continua separado. Identidade e
+O operador concluiu seis provas HTTP com checkpoint400 de engenharia e encerrou
+os servidores. A [política validada](voxcpm-gateway-execution-20261103.md) inclui
+CacheGuard, `ptbr-numbers-v1` e reserva320ms; os42 requests com reserva foram
+completos e sem lacunas. O treino LoRA continua separado. Identidade e
 seleção final permanecem abertas. Tempos do motor nativo não são tempos deste
 gateway: normalização, segmentação, pausas entre segmentos e transporte mudam
 o percurso medido.
@@ -77,9 +77,9 @@ separados. Não há upload de pesos ou áudio. Hashes fixos:
 KV1024, max_len400, NFE10, CFG2, prefix4, seed40733133, sem referências de
 clonagem, VAD ou retry. Configuração e tokenizer usam blobs pinados. A
 otimização oficial `reduce-overhead` é obrigatória, com os quatro wrappers
-verificados; três chamadas na mesma thread antecedem readiness. Reprodução de
-CUDA graphs e residência após o aquecimento ainda exigem o gate GPU deste novo
-runtime. Não importar helpers de treino evita executar packers, loops, sinais
+verificados; três chamadas na mesma thread antecedem readiness. Os
+[recibos HTTP](voxcpm-gateway-execution-20261103.md) registram replays reais e
+verificações de residência no gate GPU. Não importar helpers de treino evita executar packers, loops, sinais
 ou supervisores ao servir áudio.
 
 `voxcpm_audio.HalfRateFIR` copia inalterado o resampler validado: 41 taps,
@@ -142,7 +142,7 @@ Com GPU liberada pelo operador e checkpoint selecionado:
 ```bash
 AEGIS_TTS_BACKEND=voxcpm2 \
 AEGIS_VOXCPM_CONFIG=/CAMINHO/PRIVADO/voxcpm2-runtime.json \
-AEGIS_TTS_ONSET_TRIM=off AEGIS_TTS_STREAM_STARTUP_MS=0 \
+AEGIS_TTS_ONSET_TRIM=off AEGIS_TTS_STREAM_STARTUP_MS=320 \
 PYTHONPATH=gateway \
 /CAMINHO/AMBIENTE/bin/python -m uvicorn default_reference_gateway:app \
   --host 127.0.0.1 --port 8002 --workers 1
@@ -151,19 +151,18 @@ curl -f http://127.0.0.1:8002/ready
 python3 scripts/smoke-test.py --base-url http://127.0.0.1:8002
 ```
 
-Esses comandos de serviço não foram executados. O gate restante deve verificar
-pesos/sidecar selecionados, cold+warm na thread persistente, WAV e PCM reais,
-primeira fala no cliente, comprimentos curto/médio/longo, cancelamento durante
-geração e cliente lento, KV/VAE após cancelamento, saúde/readiness e ASR. Somente
-depois cabe comparar com Qwen pelo gateway e avaliar identidade. Restaurar Qwen
+Os comandos reais das provas ficam nos manifests do executor. O gate de
+engenharia confirmou cold+warm, WAV/PCM, cliente, cancelamento e nova síntese,
+saúde/readiness. O próximo gate repete a medição com os pesos finais salvos,
+incluindo ASR, comparação com Qwen e avaliação de identidade. Restaurar Qwen
 usa seu Compose/entrypoint original sem a feature flag; nenhuma configuração
 protegida ou padrão foi alterado por esta preparação.
 
 ## Executor da janela GPU preparado
 
 `training/v2_voxcpm_gateway_probe.py` é um plano por padrão. `execute` recusa
-execução fora do GPU worker exclusivo, com ASR pausado e CPU ociosa; não foi
-executado nesta preparação. Recebe caminho e SHA do checkpoint selecionado,
+execução fora do GPU worker exclusivo, com ASR pausado e CPU ociosa. Foi
+executado nas provas documentadas. Recebe caminho e SHA do checkpoint selecionado,
 verifica seu sidecar e exige espaço de trabalho abaixo de 40 GB, mais margem
 de 1 GiB para este experimento e reserva livre de 5 GiB. Não salva checkpoints.
 Inicia somente seu filho uvicorn8002 e o encerra em `finally`, conferindo PID,
@@ -185,12 +184,13 @@ python3 -m training.v2_voxcpm_gateway_probe --action cpu-check
 python3 -m training.v2_voxcpm_gateway_probe
 # SOMENTE como job do GPU worker exclusivo, com GPU liberada:
 python3 -m training.v2_voxcpm_gateway_probe --action execute \
+  --startup-ms 320 \
   --run /CAMINHO/PRIVADO/NOVA-EXECUCAO \
   --checkpoint /CAMINHO/PRIVADO/CHECKPOINT-ESTAVEL.pt \
   --checkpoint-sha256 SHA256-DO-CHECKPOINT
-# Controle separado, depois de concluir/encerrar o primeiro servidor:
+# Controle numérico, depois de concluir/encerrar o primeiro servidor:
 python3 -m training.v2_voxcpm_gateway_probe --action execute \
-  --frontend f5-refinement-1 --run /CAMINHO/PRIVADO/OUTRA-EXECUCAO \
+  --frontend ptbr-numbers-v1 --startup-ms 320 --run /CAMINHO/PRIVADO/OUTRA-EXECUCAO \
   --checkpoint /CAMINHO/PRIVADO/CHECKPOINT-ESTAVEL.pt \
   --checkpoint-sha256 SHA256-DO-CHECKPOINT
 ```

@@ -137,3 +137,46 @@ científicos públicos e confirmar recursos no piloto antes de iniciar:
 O limite de passos é uma fronteira ampliável; a parada depende da validação
 e do áudio. Retomadas posteriores deste mesmo estágio usam `--resume` e a
 mesma inicialização congelada; não restaurar o Adam do estágio público.
+
+
+## Execução CPU autorizada e concluída
+
+Em 03/11/2026, 14:50:20–14:51:29 UTC, o supervisor CPU separado
+`training/v2_fastpitch_target_features.py` executou a etapa com CUDA oculta,
+nice 19 e dois workers de uma thread. SHA256 da fonte:
+`1c88782a8e3b52382d6f9dce00bf36b707ebf83f6ddc1cc1ea38beb9753876bc`.
+PID 229461/start 372353168 supervisionou o grupo próprio
+PID 229462/start 372353177; ambos encerraram com exit 0. O mecanismo STOP/CONT
+do próprio grupo verificou UID, PID/start, PGID e SID; um teste stdlib
+confirmou a pausa/retomada e a recusa de start ticks incorretos. A pausa não
+foi necessária durante esta execução. Não houve GPU, fila ou sinal a trainer.
+
+Os 950 objetos legados passaram integralmente por SHA de feature e áudio,
+proveniência, texto/tokens, config, shapes e finitude antes dos hardlinks.
+Foram preparados 130 objetos novos. O cache antigo e os originais continuam
+intocados. O novo cache tem 1.025 treino/55 validação em
+`/var/tmp/aegis-v2-work/fastpitch/aegis-features-v2/`, com 527.216.640 bytes
+alocados. A auditoria final dos 1.080 objetos passou e hashou
+1.980.553.840 bytes de áudio em 12,42 s; o worker completou em 63,92 s.
+O log limitado ficou com 111.397 bytes.
+
+Os stats recalculados só com 1.025 treino são mean 186,49572123592918 Hz e
+std 52,02665106362999 Hz: 1.005.399 frames positivos entre 1.221.052. O intervalo
+positivo 30,804–773,583 Hz merece inspeção futura de vozeamento/oitavas; não
+comprova timbre. A checagem independente das somas reproduziu os valores
+salvos em features.json. O helper 453c não foi alterado.
+
+O orçamento global final foi 37.625.905.152 bytes, com 26.659.119.104 bytes
+livres. O pico conservador inicial incluía 530 MB de features, 32 MiB de
+temporários e 55 MB para checkpoint LoRA e ficou dentro de 40 GB/5 GiB.
+A reutilização elevou o uso global em aproximadamente 40,44 MB. Não se fez
+limpeza de insumos antigos nesta etapa.
+
+Recibo principal: `aegis-features-v2/qualification.json`,
+status `qualified_cache_only_not_model`. Manifests de features:
+treino `b0eb4132920c47be06a17e2efd1494498059103dbc3cf46ad8f6510359eb6d72`,
+validação `d09c52b17c8d8f7d02156abc47f5f8263c6c0c5d1efe89d3937cfce15517afc3`;
+config `d117d7f0bdaec1551734aab24abb0801a06e157628497934a3fbef75cd6aa40c`.
+Logs, orçamento, auditoria legada, teste de pausa e progresso estão em
+`fastpitch/aegis-preparation/`. O teste final permaneceu fechado. Este cache
+não autoriza treino Aegis antes de qualificar o idioma do checkpoint público.
