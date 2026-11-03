@@ -26,7 +26,7 @@ from training.f5_refine_audit import asr_for
 from training.f5_report import operation_windows
 
 DEFAULT_ROOT = Path('/var/tmp/aegisvoice-v2-refinement-20261103')
-DEFAULT_ARCHIVE = Path('/home/phc/aegisvoice-v2-refinement-20261103.zip')
+DEFAULT_ARCHIVE = DEFAULT_ROOT / 'aegisvoice-v2-refinement-20261103.zip'
 CASES = ('ordinary', 'lexical', 'long')
 STAGES = ('controlled', 'references', 'pronunciation', 'alignment', 'duration')
 MEASURES = ('total_seconds', 'audio_seconds', 'rtf', 'first_pcm_ms',
