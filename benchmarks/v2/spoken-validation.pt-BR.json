@@ -1,0 +1,12 @@
+{
+  "policy":"Fixed before ASR inspection. Intended spoken wording; no automatic rewrite of ASR or raw request. Name and acronym spellings remain ambiguous for ASR.",
+  "cases": {
+    "v_command":"Aegis, confirme o modo de manutenção.",
+    "v_reply":"Sim, a válvula azul está fechada.",
+    "v_pressure":"Aegis, leia o nível de pressão às quatorze horas e cinco minutos e compare com dois vírgula sete quilopascais.",
+    "v_acronyms":"A cê pê u verificou a a pê i; confira o cê pê efe no sus e envie a u erre ele por agá tê tê pê ésse.",
+    "v_question":"João, você confirmou a revisão em São José na terça-feira, dia vinte e quatro de novembro?",
+    "v_sibilants":"Seis sensores silenciosos registraram chuvas, chiados e oscilações na seção seis.",
+    "v_long":"Antes de abrir o compartimento, confira se o painel mostra pressão estável e temperatura de vinte e três graus. Se o indicador vermelho piscar duas vezes, aguarde dez segundos e consulte o histórico da estação. Depois, registre o horário da inspeção, confirme o número de série e pergunte ao responsável se a válvula pode ser liberada. Aegis permanecerá em modo de observação até receber a próxima instrução."
+  }
+}

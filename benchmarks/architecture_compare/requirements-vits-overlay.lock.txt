@@ -1,0 +1,12 @@
+# Overlay only. Existing shared F5 environment provides torch2.6.0+cu118,
+# numpy1.26.4, librosa0.11.0, scipy, soundfile, matplotlib, num2words and fsspec.
+# Install --no-deps --target PRIVATE/vits/deps, never into production or F5 env.
+coqui-tts==0.28.0
+coqui-tts-trainer==0.4.0
+coqpit-config==0.2.5
+anyascii==0.3.3
+inflect==7.5.0
+pysbd==0.3.4
+monotonic-alignment-search==0.2.1
+more-itertools==10.8.0
+typeguard==4.4.4

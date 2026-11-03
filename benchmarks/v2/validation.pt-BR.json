@@ -1,0 +1,9 @@
+[
+  {"id":"v_command","size":"short","text":"Aegis, confirme o modo de manutenção.","purpose":"comando, nome próprio e nasalização"},
+  {"id":"v_reply","size":"short","text":"Sim, a válvula azul está fechada.","purpose":"resposta usual, acentuação e fricativas"},
+  {"id":"v_pressure","size":"medium","text":"Aegis, leia o nível de pressão às 14h05 e compare com 2,7 quilopascais.","purpose":"nome, hora, decimal, acentuação e unidade"},
+  {"id":"v_acronyms","size":"medium","text":"A CPU verificou a API; confira o CPF no SUS e envie a URL por HTTPS.","purpose":"siglas como palavras e letras"},
+  {"id":"v_question","size":"medium","text":"João, você confirmou a revisão em São José na terça-feira, dia 24 de novembro?","purpose":"pergunta, nomes, nasalização e data"},
+  {"id":"v_sibilants","size":"medium","text":"Seis sensores silenciosos registraram chuvas, chiados e oscilações na seção seis.","purpose":"sibilantes e encontros consonantais"},
+  {"id":"v_long","size":"long","text":"Antes de abrir o compartimento, confira se o painel mostra pressão estável e temperatura de vinte e três graus. Se o indicador vermelho piscar duas vezes, aguarde dez segundos e consulte o histórico da estação. Depois, registre o horário da inspeção, confirme o número de série e pergunte ao responsável se a válvula pode ser liberada. Aegis permanecerá em modo de observação até receber a próxima instrução.","purpose":"estabilidade longa, pausas, cauda, repetições e números"}
+]

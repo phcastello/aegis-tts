@@ -1,0 +1,8 @@
+[
+  {"id":"t_command","size":"short","text":"Aegis, anuncie o próximo destino.","purpose":"comando inédito e identidade"},
+  {"id":"t_reply","size":"short","text":"O registro foi salvo às 09h42.","purpose":"resposta usual, hora e cauda"},
+  {"id":"t_numbers","size":"medium","text":"Em 03/12/2026, a reserva será de R$ 958,46, com acréscimo de 8,3%.","purpose":"data, moeda, decimal e porcentagem"},
+  {"id":"t_phonetics","size":"medium","text":"Amanhã, Cássia levará pinhões, queijo e chá para a reunião em Florianópolis.","purpose":"fonética brasileira e palavras novas"},
+  {"id":"t_question","size":"medium","text":"A API da Aegis já consultou a CPU, o SUS e o CPF, ou devo verificar outra URL?","purpose":"siglas, nome e pergunta"},
+  {"id":"t_long","size":"long","text":"O novo relatório descreve uma oscilação pequena no circuito de refrigeração. Primeiro, verifique as conexões próximas ao módulo central e confirme se os três sensores respondem normalmente. Em seguida, compare a medição atual com o valor anotado ontem, sem apagar o histórico. Caso a diferença ultrapasse quatro unidades, mantenha a porta fechada e solicite uma nova inspeção. Quando a leitura estabilizar, a Aegis poderá anunciar que o procedimento terminou.","purpose":"continuidade, negação, timbre em texto longo e última palavra"}
+]
