@@ -38,7 +38,7 @@ def sha(path):
 
 def atomic_json(path,value):
  path=Path(path);path.parent.mkdir(parents=True,exist_ok=True,mode=0o700);tmp=path.with_suffix(path.suffix+'.tmp')
- tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n');tmp.chmod(0o600);tmp.replace(path)
+ tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n',encoding='utf-8');tmp.chmod(0o600);tmp.replace(path)
 
 def verify(args,vae_only=False):
  commit=subprocess.check_output(['git','-C',str(args.source),'rev-parse','HEAD'],text=True).strip()
@@ -130,7 +130,7 @@ def cpu_check(args,torch,cls,lora_cls):
  import resource
  from collections import Counter
  from safetensors import safe_open
- memory={line.split(':')[0]:int(line.split()[1])*1024 for line in Path('/proc/meminfo').read_text().splitlines() if line.startswith(('MemTotal:','MemAvailable:'))}
+ memory={line.split(':')[0]:int(line.split()[1])*1024 for line in Path('/proc/meminfo').read_text(encoding='utf-8').splitlines() if line.startswith(('MemTotal:','MemAvailable:'))}
  predicted_peak=11_000_000_000;reserve=2_000_000_000
  if memory['MemAvailable']<predicted_peak+reserve:
   raise RuntimeError('insufficient measured RAM for CPU load: '+json.dumps(memory))
@@ -230,7 +230,7 @@ def save_state(path,model,optimizer,scheduler,step,cursor,torch,np,config):
  tmp.replace(path);atomic_json(path.with_suffix('.sha256.json'),dict(sha256=sha(path),step=step,bytes=path.stat().st_size))
 
 def restore(path,model,optimizer,scheduler,masters,torch,np,config):
- receipt=json.loads(path.with_suffix('.sha256.json').read_text())
+ receipt=json.loads(path.with_suffix('.sha256.json').read_text(encoding='utf-8'))
  if sha(path)!=receipt['sha256']:raise ValueError('resume integrity failure')
  state=torch.load(path,map_location='cpu',weights_only=False)
  if state['config']!=config:raise ValueError('resume configuration/data partition mismatch')
@@ -279,9 +279,9 @@ def synthesize(args,model,torch,np,label):
 def roundtrip(args,torch,vae_cls,vae_config):
  import numpy as np
  import soundfile as sf
- config=json.loads((args.model/'config.json').read_text())['audio_vae_config'];vae=vae_cls(config=vae_config(**config))
+ config=json.loads((args.model/'config.json').read_text(encoding='utf-8'))['audio_vae_config'];vae=vae_cls(config=vae_config(**config))
  state=torch.load(args.model/'audiovae.pth',map_location='cpu',weights_only=True);vae.load_state_dict(state.get('state_dict',state),strict=True);vae.to('cuda').eval()
- rows=[json.loads(x) for x in args.manifest.read_text().splitlines()][:args.samples];results=[]
+ rows=[json.loads(x) for x in args.manifest.read_text(encoding='utf-8').splitlines()][:args.samples];results=[]
  for row in rows:
   if row.get('split') not in ('validation','val'):raise ValueError('VAE decision needs reserved validation anchors, not training/final test')
   values,path,sr=audio(row,np);tensor=torch.from_numpy(values)[None,None].cuda();torch.cuda.synchronize();start=time.perf_counter();torch.cuda.reset_peak_memory_stats()
@@ -316,7 +316,7 @@ def pilot(args,torch,cls,lora_cls,packer_cls):
  if args.optimizer_device=='cpu':optimizer,masters=cpu_optimizer(params,torch,args.lr)
  else:optimizer=torch.optim.AdamW(params,lr=args.lr,weight_decay=.01);masters=None
  scheduler=torch.optim.lr_scheduler.LambdaLR(optimizer,lambda step:1.)
- all_rows=[json.loads(x) for x in args.manifest.read_text().splitlines()]
+ all_rows=[json.loads(x) for x in args.manifest.read_text(encoding='utf-8').splitlines()]
  if any(r.get('split','train')!='train' for r in all_rows):raise ValueError('pilot requires train split only')
  rows=[r for r in all_rows if 3<=r['duration']<=args.max_seconds]
  if len(rows)<2:raise ValueError('need >=2 complete short training clips; do not crop audio/text')
@@ -392,7 +392,7 @@ def main():
   import numpy as np
   model=load_model(a,torch,cls,lora_cls)
   if a.resume:
-   if sha(a.resume)!=json.loads(a.resume.with_suffix('.sha256.json').read_text())['sha256']:raise ValueError('LoRA integrity failure')
+   if sha(a.resume)!=json.loads(a.resume.with_suffix('.sha256.json').read_text(encoding='utf-8'))['sha256']:raise ValueError('LoRA integrity failure')
    state=torch.load(a.resume,map_location='cpu',weights_only=False)
    copy_lora_strict(model,state['lora'],torch)
   synthesize(a,model,torch,np,'inference')
