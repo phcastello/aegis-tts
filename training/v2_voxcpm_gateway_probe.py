@@ -315,7 +315,7 @@ def execute(args):
  env=child_environment(args);env.update(AEGIS_TTS_BACKEND='voxcpm2',AEGIS_VOXCPM_CONFIG=str(config_path),
   AEGIS_TTS_ONSET_TRIM='off',AEGIS_TTS_STREAM_STARTUP_MS='0',AEGIS_TTS_PROFILE_LATENCY='1',
   AEGIS_TTS_SOURCE_COMMIT=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip())
- front='OriginalNFC' if args.frontend=='original-nfc' else 'F5Refinement1'
+ front={'original-nfc':'OriginalNFC','f5-refinement-1':'F5Refinement1','ptbr-numbers-v1':'PtbrNumbers1'}[args.frontend]
  profile=f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-Passthrough-{front}-Experimental'
  command=[str(args.python),'-m','uvicorn','default_reference_gateway:app','--host','127.0.0.1','--port',str(args.port),
   '--workers','1','--loop','asyncio','--http','h11','--no-access-log','--log-level','warning']
@@ -338,16 +338,24 @@ def execute(args):
   def budget_watch():
    while not stop.wait(5):
     from training.v2_language_monitor import physical_usage
-    cache=physical_usage([args.cache])['allocated_bytes'];free=shutil.disk_usage(args.run).free
+    # The runtime's CacheGuard owns cache traversal. Read its numeric snapshot;
+    # do not add a second cache crawl to the client benchmark process.
+    cache=None
+    try:
+     status,_,body=complete_request(args.port,'/metrics',timeout=2)
+     if status==200:
+      metrics={line.split()[0]:float(line.split()[1]) for line in body.decode().splitlines() if line and not line.startswith('#')}
+      cache=int(metrics.get('aegis_voxcpm_compile_cache_bytes',initial_cache))
+    except (OSError,http.client.HTTPException,ValueError):pass
+    free=shutil.disk_usage(args.run).free
     output=physical_usage([args.run])['allocated_bytes']
     # No full project crawl during latency observations. Exclusive GPU/paused
     # ASR plus bounded cache/output use the preflight's1GiB experiment margin.
-    estimated=usage['allocated_bytes']+max(0,cache-initial_cache)+output
-    if cache>512*1024**2 or free<5*1024**3 or output>512*1024**2 or estimated>40_000_000_000:
+    estimated=usage['allocated_bytes']+max(0,(cache if cache is not None else initial_cache)-initial_cache)+output
+    if (cache is not None and cache>512*1024**2) or free<5*1024**3 or output>512*1024**2 or estimated>40_000_000_000:
      save(args.run/'safety-stop.json',dict(cache_bytes=cache,free_bytes=free,estimated_working_bytes=estimated))
      stop_owned(process,identity);return
-  from training.v2_language_monitor import physical_usage
-  initial_cache=physical_usage([args.cache])['allocated_bytes']
+  initial_cache=0
   watch=threading.Thread(target=budget_watch,daemon=True);watch.start()
   startup=[];deadline=time.monotonic()+args.ready_timeout
   while time.monotonic()<deadline:
@@ -406,8 +414,8 @@ def execute(args):
     status,_,body=complete_request(args.port,'/v1/aegis/speech/'+identifier+'/events')
     if status==200:events.append(dict(case=row['case'],repetition=row['repetition'],request_id=identifier,sse=body.decode('utf-8')))
    if row['repetition']==0:
-    from gateway.aegis_speech.experimental_text import OriginalTextNormalizer,RefinedTextNormalizer
-    normalizer=OriginalTextNormalizer() if args.frontend=='original-nfc' else RefinedTextNormalizer()
+    from gateway.aegis_speech.experimental_text import normalizer_for
+    normalizer=normalizer_for(args.frontend)
     jobs.append(dict(candidate='voxcpm2-lora-gateway-'+args.frontend,case=row['case'],wav=str(benchmark/row['wav']),
      expected_verbatim=corpus[row['case']]['text'],expected_spoken=spoken[row['case']],
      expected_effective=normalizer.normalize(corpus[row['case']]['text']).normalized_text,frontend=args.frontend,
@@ -451,7 +459,7 @@ def main():
  p.add_argument('--cache',type=Path,default=ROOT/'voxcpm2/compile-cache')
  p.add_argument('--compiler-prerequisites',type=Path,default=ROOT/'voxcpm2/compile-prereqs.json')
  p.add_argument('--checkpoint',type=Path);p.add_argument('--checkpoint-sha256')
- p.add_argument('--frontend',choices=['original-nfc','f5-refinement-1'],default='original-nfc')
+ p.add_argument('--frontend',choices=['original-nfc','f5-refinement-1','ptbr-numbers-v1'],default='original-nfc')
  p.add_argument('--port',type=int,default=8002);p.add_argument('--ready-timeout',type=float,default=600)
  a=p.parse_args();os.umask(0o077);a.run=private(a.run)
  # A venv interpreter is normally a symlink to /usr/bin/python3. Resolving

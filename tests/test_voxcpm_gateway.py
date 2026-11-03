@@ -1,6 +1,8 @@
 """CPU/fake-model contracts for the optional gateway. No Torch/CUDA/model load."""
 from __future__ import annotations
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from contextlib import aclosing
 import io
 import hashlib
@@ -9,7 +11,7 @@ import json
 from pathlib import Path
 import sys
 import threading
-from types import SimpleNamespace
+from types import SimpleNamespace,ModuleType
 import wave
 
 import httpx
@@ -29,7 +31,7 @@ sys.modules[_spec.name]=runtime
 _spec.loader.exec_module(runtime)
 from voxcpm_adapter import processed_stream
 from voxcpm_audio import HalfRateFIR,pcm16_bytes
-from aegis_speech.experimental_text import OriginalTextNormalizer,OriginalTextSegmenter,RefinedTextNormalizer
+from aegis_speech.experimental_text import OriginalTextNormalizer,OriginalTextSegmenter,RefinedTextNormalizer,NumbersTextNormalizer,normalizer_for
 from output_onset import OutputOnsetTrimmer
 
 
@@ -203,6 +205,14 @@ def test_refinement_copy_is_hash_bound_and_equivalent_on_seven_validation_texts(
         assert RefinedTextNormalizer().normalize(row['text']).normalized_text==original(row['text'])['tts_text']
 
 
+def test_numeric_control_expands_time_and_keeps_name_and_acronyms_literal():
+    value=NumbersTextNormalizer().normalize('Aegis, a CPU consulta a API e as APIs às 14h05, em 24 kHz.')
+    assert value.normalized_text=='Aegis, a CPU consulta a API e as APIs às quatorze horas e cinco minutos, em vinte e quatro quilohertz.'
+    assert all(not r.rule_id.startswith('lexicon:') for r in value.applied_rules)
+    assert normalizer_for('original-nfc').normalize('Aegis CPU API 14h05').normalized_text=='Aegis CPU API 14h05'
+    assert 'A éjis' in normalizer_for('f5-refinement-1').normalize('Aegis').normalized_text
+
+
 @pytest.mark.parametrize('literal',['3.14','10.1.1.47','nome@example.org','https://example.org/teste'])
 def test_original_technical_tokens_survive_before_a_later_sentence(literal):
     source='Leia '+literal+' agora. Depois feche a porta.'
@@ -231,10 +241,105 @@ def test_base_loader_refuses_missing_non_lora_even_when_upstream_uses_strict_fal
 def test_model_and_gpu_lease_are_released_even_when_reset_raises(tmp_path):
     value=runtime.NativeSession(config(tmp_path));released=[]
     value.model=object();value.lease=SimpleNamespace(close=lambda:released.append('lease'))
+    value.cache_guard=SimpleNamespace(close=lambda:released.append('guard'))
     def broken():raise RuntimeError('simulated reset failure')
     value.reset=broken
     with pytest.raises(RuntimeError,match='reset failure'):value.close()
-    assert value.model is None and value.lease is None and released==['lease']
+    assert value.model is None and value.lease is None and released==['guard','lease']
+
+
+def test_guard_checks_only_on_monitor_and_native_owner_uses_snapshots(tmp_path,monkeypatch):
+    calls=[];cfg=config(tmp_path)
+    def checker(config):
+        calls.append(threading.get_ident());return dict(compile_cache_bytes=10,cache_free_bytes=6*1024**3)
+    guard=runtime.CacheGuard(cfg,checker=checker,interval=60.,max_age=120.)
+    guard.start();guard.check_now()
+    fake=ModuleType('torch');fake.__path__=[]
+    fake.no_grad=nullcontext
+    fake.compiler=SimpleNamespace(cudagraph_mark_step_begin=lambda:None)
+    fake.cuda=SimpleNamespace(memory_allocated=lambda:0,memory_reserved=lambda:0,max_memory_allocated=lambda:0,
+        max_memory_reserved=lambda:0,reset_peak_memory_stats=lambda:None,synchronize=lambda:None,empty_cache=lambda:None)
+    modules={'torch':fake}
+    for name in ('torch._dynamo','torch._inductor'):
+        modules[name]=ModuleType(name);modules[name].__path__=[]
+    modules['torch._dynamo.utils']=ModuleType('torch._dynamo.utils');modules['torch._dynamo.utils'].counters={'stats':{'unique_graphs':0}}
+    modules['torch._inductor.metrics']=ModuleType('torch._inductor.metrics');modules['torch._inductor.metrics'].generated_kernel_count=0
+    for name,module in modules.items():monkeypatch.setitem(sys.modules,name,module)
+    session=runtime.NativeSession(cfg);session.torch=fake;session.cache_guard=guard
+    zeros=[];neural=[]
+    def generate(**kwargs):neural.append((threading.get_ident(),kwargs));return iter([np.zeros(100,dtype=np.float32)])
+    cache=SimpleNamespace(kv_cache=SimpleNamespace(zero_=lambda:zeros.append(True)),current_length=7)
+    session.model=SimpleNamespace(generate_streaming=generate,base_lm=SimpleNamespace(kv_cache=cache),residual_lm=SimpleNamespace(kv_cache=cache))
+    before=len(calls)
+    def owner():
+        for _ in range(4):
+            assert list(session.generate('Texto.'))
+            session.reset();session.observe()
+        return threading.get_ident()
+    try:
+        with ThreadPoolExecutor(1) as executor:owner_id=executor.submit(owner).result()
+        assert len(calls)==before and all(t!=owner_id for t in calls)
+        assert len(zeros)==8 and cache.current_length==0
+        assert all(k['inference_timesteps']==10 and k['max_len']==400 and k['seed']==40733133 for _,k in neural)
+    finally:session.close()
+    assert not guard.thread.is_alive()
+
+
+def test_guard_failed_or_stale_is_fail_closed_and_thread_joins(tmp_path):
+    broken=threading.Event()
+    def checker(config):
+        if broken.is_set():raise OSError('simulated cache volume failure')
+        return dict(compile_cache_bytes=10,cache_free_bytes=6*1024**3)
+    guard=runtime.CacheGuard(config(tmp_path),checker=checker,interval=60.,max_age=120.)
+    try:
+        guard.start()
+        with guard.condition:guard.data['checked_monotonic']-=121
+        with pytest.raises(runtime.CacheGuardError):guard.require_ok()
+        assert guard.snapshot()['cache_guard_failed']==1
+        guard.check_now();broken.set()
+        with pytest.raises(runtime.CacheGuardError):guard.check_now()
+        assert guard.snapshot()['cache_guard_failed']==1
+    finally:guard.close()
+    assert not guard.thread.is_alive()
+
+
+def test_before_ready_fresh_check_cannot_accept_an_already_inflight_scan(tmp_path):
+    entered2=threading.Event();entered3=threading.Event();release2=threading.Event();release3=threading.Event();requested=threading.Event()
+    calls=[]
+    def checker(config):
+        calls.append(True)
+        if len(calls)==2:entered2.set();assert release2.wait(2)
+        if len(calls)==3:entered3.set();assert release3.wait(2)
+        return dict(compile_cache_bytes=len(calls),cache_free_bytes=6*1024**3)
+    guard=runtime.CacheGuard(config(tmp_path),checker=checker,interval=60.,max_age=120.,timeout=2.)
+    wait=guard._wait_after
+    def observed(sequence,started_after=None):
+        if started_after is not None:requested.set()
+        return wait(sequence,started_after)
+    guard._wait_after=observed
+    try:
+        guard.start();guard.wake.set();assert entered2.wait(1)
+        with ThreadPoolExecutor(1) as executor:
+            future=executor.submit(guard.check_now);assert requested.wait(1)
+            release2.set();assert entered3.wait(1)
+            assert not future.done()
+            release3.set();future.result(1)
+    finally:release2.set();release3.set();guard.close()
+
+
+@pytest.mark.asyncio
+async def test_initial_guard_failure_is_closed_before_initialization_reports_failed(tmp_path):
+    holders=[]
+    class Failing(runtime.NativeSession):
+        def load(self):
+            def checker(config):raise OSError('fixture volume failure')
+            self.cache_guard=runtime.CacheGuard(self.config,checker=checker,timeout=1.)
+            holders.append(self.cache_guard);self.cache_guard.start()
+    backend=runtime.VoxBackend(config(tmp_path),Failing)
+    await backend.start();await backend.initializing
+    assert backend.state=='failed' and not backend.is_ready
+    await backend.close()
+    assert holders[0].closed and not holders[0].thread.is_alive()
 
 
 def test_replay_counter_preserves_result_and_restores_original_on_failed_close(tmp_path):
@@ -285,7 +390,7 @@ def test_runtime_resampler_has_the_same_phase_and_samples_as_the_validated_probe
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('frontend',['original-nfc','f5-refinement-1'])
+@pytest.mark.parametrize('frontend',['original-nfc','f5-refinement-1','ptbr-numbers-v1'])
 async def test_gateway_contracts_readiness_profile_wav_pcm_and_preheader_overflow(tmp_path,monkeypatch,frontend):
     cfg=config(tmp_path,frontend=frontend);gate=threading.Event();records=[];holder=[]
     backend_class=runtime.VoxBackend
@@ -317,7 +422,7 @@ async def test_gateway_contracts_readiness_profile_wav_pcm_and_preheader_overflo
                 assert wav.status_code==200 and wav.headers['x-aegis-voice-profile']==cfg.profile
                 assert wav.headers['x-aegis-tts-dsp-variant']=='passthrough'
                 assert wav.headers['x-aegis-tts-frontend']==frontend
-                normalizer=OriginalTextNormalizer() if frontend=='original-nfc' else RefinedTextNormalizer()
+                normalizer=normalizer_for(frontend)
                 assert holder[0].inputs[-1]==normalizer.normalize('Aegis, leia às 14h05.').normalized_text
                 with wave.open(io.BytesIO(wav.content)) as audio:
                     assert (audio.getnchannels(),audio.getsampwidth(),audio.getframerate(),audio.getnframes())==(1,2,24000,5002)

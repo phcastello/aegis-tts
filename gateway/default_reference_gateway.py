@@ -204,13 +204,13 @@ def _check_dsp_imports() -> None:
 async def lifespan(app: FastAPI):
     if VOX_CONFIG is not None:
         from voxcpm_runtime import VoxBackend
-        from aegis_speech.experimental_text import OriginalTextNormalizer, OriginalTextSegmenter, RefinedTextNormalizer
+        from aegis_speech.experimental_text import OriginalTextSegmenter, normalizer_for
         if VOX_CONFIG.dsp == "world-w04-p07-m02":
             _check_dsp_imports()
             AcousticStreamProcessor(SAMPLE_RATE, initial_segment=INITIAL_SEGMENT)
         app.state.vox_backend = VoxBackend(VOX_CONFIG)
         app.state.metrics = GatewayMetrics()
-        app.state.normalizer = OriginalTextNormalizer() if VOX_CONFIG.frontend == "original-nfc" else RefinedTextNormalizer()
+        app.state.normalizer = normalizer_for(VOX_CONFIG.frontend)
         app.state.segmenter = OriginalTextSegmenter()
         app.state.service = SpeechService(_segment_adapter,
             allow_replace_all=os.environ.get("AEGIS_ALLOW_REPLACE_ALL") == "1",
@@ -868,7 +868,7 @@ def _runtime_headers() -> dict[str, str]:
             "X-Aegis-TTS-Backend-State": getattr(getattr(app.state,"vox_backend",None),"state","not_started"),
             "X-Aegis-TTS-Frontend": VOX_CONFIG.frontend,
             "X-Aegis-TTS-DSP-Variant": "passthrough" if VOX_CONFIG.dsp == "passthrough" else "world-w04-p07-m02-" + INITIAL_SEGMENT,
-            "X-Aegis-TTS-Runtime-Variant": "experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-" + VOX_CONFIG.frontend + "-onset-" + ONSET_TRIM}
+            "X-Aegis-TTS-Runtime-Variant": "experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-" + VOX_CONFIG.frontend + "-cacheguard5s-age15s-onset-" + ONSET_TRIM}
     return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT, "X-Aegis-TTS-DSP-Variant": INITIAL_SEGMENT,
             "X-Aegis-TTS-Runtime-Variant": RUNTIME_VARIANT}
 

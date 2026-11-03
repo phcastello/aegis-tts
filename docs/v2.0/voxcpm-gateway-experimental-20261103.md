@@ -1,9 +1,10 @@
 # Integração experimental VoxCPM2 no gateway
 
-Estado: implementação e contratos CPU revisáveis; nenhum serviço Vox foi
-iniciado e nenhum modelo foi carregado por esta integração. O treino LoRA
-continua separado. A identidade, o PT-BR e a latência HTTP ainda precisam ser
-medidos com os pesos selecionados. Tempos do motor nativo não são tempos deste
+Estado inicial: implementação e contratos CPU revisáveis. O operador concluiu
+depois os dois probes HTTP com checkpoint400 de engenharia e os encerrou. O
+runtime atual tem a [correção de orçamento e controle numérico](voxcpm-cacheguard-20261103.md),
+que aguarda nova medição HTTP. O treino LoRA continua separado. Identidade e
+seleção final permanecem abertas. Tempos do motor nativo não são tempos deste
 gateway: normalização, segmentação, pausas entre segmentos e transporte mudam
 o percurso medido.
 
@@ -131,8 +132,10 @@ contém placeholders de caminhos e hash zero: substituí-los em arquivo privado
 Torch/Transformers/Vox e os headers do compilador já auditados; não há instalação
 ou imagem nova nesta receita. `compiler_prerequisites` opcional aceita o recibo
 de headers e somente as variáveis CPATH/CC/CXX. Cache compilado limitado a512MiB,
-com5GiB livres; o código verifica antes/depois das chamadas e falha sem remover
-arquivos ativos. A carga CPU inicial exige13GB de RAM disponível medidos.
+com5GiB livres; exceder o orçamento causa falha sem remover
+arquivos ativos. A versão atual faz esses checks em um único CacheGuard
+periódico5s, com snapshots e idade máxima15s; não percorre diretórios em cada
+geração. A carga CPU inicial exige13GB de RAM disponível medidos.
 
 Com GPU liberada pelo operador e checkpoint selecionado:
 

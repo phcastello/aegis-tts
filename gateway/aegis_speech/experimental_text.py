@@ -32,10 +32,23 @@ class OriginalTextSegmenter(SpeechSegmenter):
 
 class RefinedTextNormalizer:
     """Explicit F5-refinement-1 control; never the default Vox training frontend."""
+    lexicon=None
     def normalize(self,text):
         from .experimental_refinement import normalize_text
         OriginalTextNormalizer().normalize(text)
-        result=normalize_text(text)
+        result=normalize_text(text,lexicon=self.lexicon)
         if len(result['tts_text'])>12000:raise ValueError('expanded text exceeds maximum length')
         return NormalizationResult(text,result['tts_text'],
             [AppliedRule(r['id'],r['count']) for r in result['applied_rules']],result['warnings'])
+
+
+class NumbersTextNormalizer(RefinedTextNormalizer):
+    """ptbr-numbers-v1: F5 numeric rules, preserving name and acronym spelling."""
+    lexicon={}
+
+
+def normalizer_for(frontend):
+    classes={'original-nfc':OriginalTextNormalizer,'f5-refinement-1':RefinedTextNormalizer,
+             'ptbr-numbers-v1':NumbersTextNormalizer}
+    if frontend not in classes:raise ValueError('Unknown experimental frontend')
+    return classes[frontend]()

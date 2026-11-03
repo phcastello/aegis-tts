@@ -42,6 +42,7 @@ NATIVE_PROFILE = 'AegisVoicev2.0-VoxCPM2-experimental'
 
 class BackendTextTooLong(ValueError): pass
 class GenerationLimitReached(RuntimeError): pass
+class CacheGuardError(RuntimeError): pass
 
 
 def digest(path):
@@ -83,7 +84,7 @@ class VoxConfig:
             raise ValueError('Bounded bridge buffer/stall required')
         if self.cache_limit_mib != 512: raise ValueError('Validated compile cache budget is512MiB')
         if type(self.instrument_replays) is not bool: raise ValueError('instrument_replays must be boolean')
-        if self.frontend not in {'original-nfc','f5-refinement-1'}:raise ValueError('Explicit original/refinement frontend required')
+        if self.frontend not in {'original-nfc','f5-refinement-1','ptbr-numbers-v1'}:raise ValueError('Explicit experimental frontend required')
         for name in ('source','model','adapter','cache','gpu_lock'):
             if not isinstance(getattr(self,name),Path) or not getattr(self,name).is_absolute():
                 raise ValueError('Operator paths must be absolute: '+name)
@@ -100,7 +101,7 @@ class VoxConfig:
     @property
     def profile(self):
         suffix='Passthrough' if self.dsp=='passthrough' else 'W04-P07-M02'
-        frontend='OriginalNFC' if self.frontend=='original-nfc' else 'F5Refinement1'
+        frontend={'original-nfc':'OriginalNFC','f5-refinement-1':'F5Refinement1','ptbr-numbers-v1':'PtbrNumbers1'}[self.frontend]
         return f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-{suffix}-{frontend}-Experimental'
 
 
@@ -152,18 +153,105 @@ def prepare_cache(config):
         os.environ.update(values)
 
 
-def cache_budget(config):
+def cache_budget_snapshot(config):
     # Count allocated bytes, including the compilation temp directory. Never
     # remove a file that a compiler or active runtime could still be using.
     seen=set();size=0
-    for parent,_,files in os.walk(config.cache):
+    def traversal_error(error):
+        if not isinstance(error,FileNotFoundError):raise error
+    for parent,_,files in os.walk(config.cache,onerror=traversal_error):
         for name in files:
             try: st=(Path(parent)/name).stat()
             except FileNotFoundError: continue
             if (st.st_dev,st.st_ino) not in seen: size+=st.st_blocks*512;seen.add((st.st_dev,st.st_ino))
-    if size>config.cache_limit_mib*1024**2 or shutil.disk_usage(config.cache).free<5*1024**3:
-        raise RuntimeError('Compile cache budget or filesystem reserve exceeded')
-    return size
+    free=shutil.disk_usage(config.cache).free
+    if size>config.cache_limit_mib*1024**2 or free<5*1024**3:
+        raise CacheGuardError(f'Compile cache budget or filesystem reserve exceeded: cache_bytes={size}, free_bytes={free}')
+    return dict(compile_cache_bytes=size,cache_free_bytes=free)
+
+
+def cache_budget(config):
+    """Explicit diagnostic check; serving calls use CacheGuard snapshots."""
+    return cache_budget_snapshot(config)['compile_cache_bytes']
+
+
+class CacheGuard:
+    """One sampled budget checker; no filesystem work on the CUDA owner thread.
+
+    Checks every5s, fails closed on exceptions/dead thread/snapshot age>15s.
+    Startup waits for an initial check and requests another before readiness.
+    An asynchronous limit can be exceeded between observations; the executor's
+    declared1GiB experiment margin and5GiB reserve remain necessary.
+    """
+    def __init__(self,config,checker=cache_budget_snapshot,interval=5.,max_age=15.,timeout=30.):
+        self.config=config;self.checker=checker;self.interval=interval;self.max_age=max_age;self.timeout=timeout
+        self.condition=threading.Condition();self.wake=threading.Event();self.stop=threading.Event()
+        self.thread=None;self.data=None;self.error=None;self.sequence=0;self.closed=False
+
+    def start(self):
+        if self.thread is not None:raise CacheGuardError('Cache guard already started')
+        self.thread=threading.Thread(target=self._loop,name='aegis-voxcpm-cache-guard',daemon=True)
+        self.thread.start();self._wait_after(0)
+
+    def _loop(self):
+        try:
+            os.setpriority(os.PRIO_PROCESS,threading.get_native_id(),19)
+        except (AttributeError,OSError):pass
+        while not self.stop.is_set():
+            started=time.perf_counter();started_monotonic=time.monotonic()
+            try:
+                value=self.checker(self.config)
+                with self.condition:
+                    if self.error is None:
+                        self.data=dict(value,checked_monotonic=time.monotonic(),check_started_monotonic=started_monotonic,
+                            cache_guard_last_check_seconds=time.perf_counter()-started)
+                        self.sequence+=1
+                    self.condition.notify_all()
+            except BaseException as error:
+                with self.condition:
+                    self.error=repr(error);self.condition.notify_all()
+                import traceback
+                traceback.print_exception(error,file=sys.stderr)
+                return
+            self.wake.wait(self.interval);self.wake.clear()
+
+    def _wait_after(self,sequence,started_after=None):
+        with self.condition:
+            def fresh():
+                return (self.sequence>sequence and self.data is not None and
+                    (started_after is None or self.data['check_started_monotonic']>=started_after))
+            completed=self.condition.wait_for(lambda:fresh() or self.error is not None or self.closed,timeout=self.timeout)
+            if not completed:
+                self.error='Cache guard check timed out';self.stop.set();self.wake.set()
+        self.require_ok()
+
+    def check_now(self):
+        with self.condition:before=self.sequence;requested=time.monotonic()
+        self.wake.set();self._wait_after(before,requested)
+
+    def snapshot(self):
+        with self.condition:
+            value=dict(self.data or {});error=self.error;sequence=self.sequence
+        age=time.monotonic()-value.pop('checked_monotonic',time.monotonic())
+        scan_start=value.pop('check_started_monotonic',time.monotonic())
+        alive=self.thread is not None and self.thread.is_alive()
+        healthy=bool(value) and error is None and alive and not self.closed and age<=self.max_age
+        return dict(value,cache_guard_snapshot_age_seconds=max(0.,age),cache_guard_healthy=int(healthy),
+            cache_guard_scan_start_age_seconds=max(0.,time.monotonic()-scan_start),
+            cache_guard_failed=int(error is not None or (bool(value) and (age>self.max_age or (not alive and not self.closed)))),
+            cache_guard_period_seconds=self.interval,cache_guard_max_age_seconds=self.max_age,
+            cache_guard_checks=sequence,cache_guard_thread_alive=int(alive))
+
+    def require_ok(self):
+        if not self.snapshot()['cache_guard_healthy']:
+            raise CacheGuardError(self.error or 'Cache guard unavailable, stopped or stale')
+
+    def close(self):
+        with self.condition:self.closed=True;self.condition.notify_all()
+        self.stop.set();self.wake.set()
+        if self.thread is not None:
+            self.thread.join(self.timeout)
+            if self.thread.is_alive():raise CacheGuardError('Cache guard did not stop')
 
 
 @contextmanager
@@ -202,10 +290,12 @@ class NativeSession:
         self.last_observation={};self.before_generation={}
         self.replays=0;self.replay_original=None;self.replay_hook=None
         self.load_observation={}
+        self.cache_guard=None
 
     def load(self):
         config=self.config
-        verify_local(config);prepare_cache(config);cache_budget(config)
+        verify_local(config);prepare_cache(config)
+        self.cache_guard=CacheGuard(config);self.cache_guard.start()
         config.gpu_lock.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.lease=config.gpu_lock.open('a+b')
         fcntl.flock(self.lease,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -268,6 +358,16 @@ class NativeSession:
 
     def token_count(self,text): return len(self.model.text_tokenizer(text))
 
+    def check_budget(self):
+        if self.cache_guard is None:raise CacheGuardError('Cache guard was not started')
+        self.cache_guard.require_ok()
+
+    def before_ready(self):
+        self.cache_guard.check_now()
+
+    def guard_metrics(self):
+        return self.cache_guard.snapshot() if self.cache_guard is not None else dict(cache_guard_healthy=0)
+
     def check_residency(self):
         torch=self.torch;model=self.model
         for name,p in model.named_parameters():
@@ -283,7 +383,7 @@ class NativeSession:
             if lm.kv_cache.max_length!=1024 or lm.kv_cache.kv_cache.device.type!='cuda': raise RuntimeError('KV cache residency/capacity differs')
 
     def generate(self,text):
-        cache_budget(self.config)
+        self.check_budget()
         self.before_generation=self.observe()
         self.torch.cuda.reset_peak_memory_stats()
         self.torch.compiler.cudagraph_mark_step_begin()
@@ -298,19 +398,19 @@ class NativeSession:
             for lm in (self.model.base_lm,self.model.residual_lm):
                 lm.kv_cache.kv_cache.zero_();lm.kv_cache.current_length=0
         self.torch.cuda.synchronize()
-        cache_budget(self.config)
         self.last_observation=self.observe()
         self.last_observation['generation_new_unique_graphs']=max(0,
             self.last_observation.get('compile_unique_graphs',0)-self.before_generation.get('compile_unique_graphs',0))
         if self.config.instrument_replays:
             self.last_observation['generation_cudagraph_replays']=self.replays-self.before_generation.get('cudagraph_replays_total',0)
+        self.check_budget()
 
     def observe(self):
         """Numeric diagnostics only; counters help identify novel-text recompiles."""
         values=dict(cuda_allocated_bytes=self.torch.cuda.memory_allocated(),
             cuda_reserved_bytes=self.torch.cuda.memory_reserved(),
             cuda_peak_allocated_bytes=self.torch.cuda.max_memory_allocated(),
-            cuda_peak_reserved_bytes=self.torch.cuda.max_memory_reserved(),compile_cache_bytes=cache_budget(self.config))
+            cuda_peak_reserved_bytes=self.torch.cuda.max_memory_reserved(),**self.guard_metrics())
         values['cudagraph_replays_instrumented']=int(self.config.instrument_replays)
         if self.config.instrument_replays:values['cudagraph_replays_total']=self.replays
         for line in Path('/proc/self/status').read_text().splitlines():
@@ -326,7 +426,10 @@ class NativeSession:
         return values
 
     def close(self):
-        try:self.reset()
+        try:
+            try:self.reset()
+            finally:
+                if self.cache_guard is not None:self.cache_guard.close()
         finally:
             self.model=None
             try:
@@ -352,9 +455,17 @@ class VoxBackend:
         self.state='not_started';self.initializing=None;self.ready_event=asyncio.Event()
         self.warmup=[];self.failure_code=None;self._stops=set();self._closed=False
         self.load_seconds=0.;self.ready_seconds=0.
+        self.last_timing={};self.last_bridge_wait_seconds=0.
 
     @property
-    def is_ready(self):return self.state=='ready' and not self._closed
+    def is_ready(self):
+        if self.state!='ready' or self._closed:return False
+        try:
+            check=getattr(self.session,'check_budget',None)
+            if check is not None:check()
+        except CacheGuardError:
+            self.state='failed';self.failure_code='VOX_CACHE_GUARD_FAILED';return False
+        return True
 
     async def start(self):
         if self.initializing is None:
@@ -367,9 +478,8 @@ class VoxBackend:
             try:
                 before=time.perf_counter();self.session.load();self.load_seconds=time.perf_counter()-before
                 warmup_text='Preparando a voz experimental da Aegis.'
-                if self.config.frontend=='f5-refinement-1':
-                    from aegis_speech.experimental_text import RefinedTextNormalizer
-                    warmup_text=RefinedTextNormalizer().normalize(warmup_text).normalized_text
+                from aegis_speech.experimental_text import normalizer_for
+                warmup_text=normalizer_for(self.config.frontend).normalize(warmup_text).normalized_text
                 for index in range(3):
                     start=time.perf_counter();count=0
                     for block in self._pcm(warmup_text,threading.Event()): count+=len(block)
@@ -378,6 +488,8 @@ class VoxBackend:
                         thread_id=threading.get_ident(),pcm_bytes=count,seconds=time.perf_counter()-start,
                         frontend=self.config.frontend,text_sha256=hashlib.sha256(warmup_text.encode()).hexdigest(),
                         diagnostics=dict(getattr(self.session,'last_observation',{}))))
+                check=getattr(self.session,'before_ready',None)
+                if check is not None:check()
             except BaseException:
                 self.session.close();self.session=None;raise
         try:
@@ -401,6 +513,10 @@ class VoxBackend:
         values=dict(ready=int(self.is_ready),warmup_completed=len(self.warmup),
             load_seconds=self.load_seconds,ready_seconds=self.ready_seconds,initialization_failed=int(self.state=='failed'))
         if self.session is not None:values.update(getattr(self.session,'last_observation',{}))
+        if self.session is not None:
+            metrics=getattr(self.session,'guard_metrics',None)
+            if metrics is not None:values.update(metrics())
+        values.update(self.last_timing);values['bridge_wait_seconds']=self.last_bridge_wait_seconds
         startup=[getattr(self.session,'load_observation',{})] if self.session is not None else []
         startup.extend(row.get('diagnostics',{}) for row in self.warmup)
         for diagnostics in startup:
@@ -411,12 +527,21 @@ class VoxBackend:
 
     def _pcm(self,text,stop):
         iterator=None;resampler=HalfRateFIR();completed=False;chunks=0;emitted=0
-        guard=capacity_guard(self.session.token_count(text),self.config)
+        timing=dict(preflight_seconds=0.,first_native_next_seconds=0.,native_next_seconds=0.,
+            native_close_seconds=0.,reset_seconds=0.)
+        started=time.perf_counter();guard=capacity_guard(self.session.token_count(text),self.config)
         try:
             iterator=iter(self.session.generate(text))
+            timing['preflight_seconds']=time.perf_counter()-started
             while not stop.is_set():
+                check=getattr(self.session,'check_budget',None)
+                if check is not None:check()
+                before=time.perf_counter()
                 try:chunk=next(iterator)
-                except StopIteration:completed=True;break
+                except StopIteration:
+                    timing['native_next_seconds']+=time.perf_counter()-before;completed=True;break
+                elapsed=time.perf_counter()-before;timing['native_next_seconds']+=elapsed
+                if not chunks:timing['first_native_next_seconds']=elapsed
                 chunks+=1
                 if stop.is_set():break
                 block=pcm16_bytes(resampler.push(native_numpy(chunk)))
@@ -430,11 +555,17 @@ class VoxBackend:
         finally:
             if not resampler.closed:resampler.cancel()
             try:
-                if iterator is not None and hasattr(iterator,'close'):iterator.close()
+                before=time.perf_counter()
+                try:
+                    if iterator is not None and hasattr(iterator,'close'):iterator.close()
+                finally:timing['native_close_seconds']=time.perf_counter()-before
             finally:
+                before=time.perf_counter()
                 try:self.session.reset()
                 except BaseException:
                     self.state='failed';self.failure_code='VOX_RESET_FAILED';raise
+                finally:
+                    timing['reset_seconds']=time.perf_counter()-before;self.last_timing=timing
 
     async def stream(self,text,cancelled):
         if not self.is_ready:raise RuntimeError('Vox backend is not ready')
@@ -442,19 +573,26 @@ class VoxBackend:
         self.validate([text]);loop=asyncio.get_running_loop();queue=asyncio.Queue(self.config.max_buffer_chunks)
         stop=threading.Event();self._stops.add(stop)
         def produce():
-            iterator=self._pcm(text,stop)
+            iterator=self._pcm(text,stop);wait_seconds=0.
             try:
                 for block in iterator:
                     if stop.is_set():break
                     pending=asyncio.run_coroutine_threadsafe(queue.put(block),loop);start=time.monotonic()
                     while True:
-                        try:pending.result(timeout=.05);break
+                        try:
+                            check=getattr(self.session,'check_budget',None)
+                            if check is not None:check()
+                            pending.result(timeout=.05);break
                         except TimeoutError:
                             if stop.is_set() or time.monotonic()-start>=self.config.client_stall_seconds:
                                 pending.cancel()
                                 if not stop.is_set():raise TimeoutError('Vox client stalled')
                                 return
-            finally:iterator.close()
+                        except BaseException:pending.cancel();raise
+                    wait_seconds+=time.monotonic()-start
+            finally:
+                try:iterator.close()
+                finally:self.last_bridge_wait_seconds=wait_seconds
         future=asyncio.wrap_future(self.executor.submit(produce));cancel=asyncio.create_task(cancelled.wait());get=None
         try:
             while not cancelled.is_set():
