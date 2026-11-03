@@ -54,10 +54,18 @@ def test_invalid_decision_keeps_final_corpus_closed(tmp_path,monkeypatch,kind):
     assert opened==[]
 
 
-def test_valid_bound_decision_preserves_synthetic_run(tmp_path,monkeypatch):
+@pytest.mark.parametrize('kind',['legacy','baseline_qwen_selected_vox','baseline_f5_selected_vox','selected_baseline_qwen'])
+def test_valid_bound_decision_preserves_synthetic_run(tmp_path,monkeypatch,kind):
     cohort=tmp_path/'synthetic-cohort';cohort.mkdir();final=cohort/'test.pt-BR.json'
     final.write_text(json.dumps([dict(id='synthetic_case',size='short',text='Uma frase sintética.')]),encoding='utf-8')
-    path=tmp_path/'synthetic-decision.json';path.write_text(json.dumps(decision()),encoding='utf-8')
+    value=decision();args=arguments(tmp_path,tmp_path/'synthetic-decision.json');role=None
+    if kind!='legacy':
+        args.candidate='F5' if kind=='baseline_f5_selected_vox' else 'Qwen'
+        value['selected_candidate']='Qwen' if kind=='selected_baseline_qwen' else 'Vox'
+        value['comparison_roster']=[dict(candidate='Qwen',role='baseline'),dict(candidate='F5',role='baseline'),dict(candidate='Vox',role='finalist')]
+        if kind=='selected_baseline_qwen':value['comparison_roster']=[dict(candidate='Qwen',role='baseline')]
+        role='baseline'
+    path=Path(args.decision);path.write_text(json.dumps(value),encoding='utf-8')
     monkeypatch.setattr(benchmark,'HERE',cohort)
     original=Path.read_text;opened=[]
     def tracked_read(self,*args,**kwargs):
@@ -71,10 +79,40 @@ def test_valid_bound_decision_preserves_synthetic_run(tmp_path,monkeypatch):
         return pcm,row
     monkeypatch.setattr(benchmark,'receive',receive)
     monkeypatch.setattr(benchmark.subprocess,'run',lambda *args,**kwargs:SimpleNamespace(stdout='synthetic-commit'))
-    benchmark.run(arguments(tmp_path,path))
+    benchmark.run(args)
     assert opened[:2]==[path,final]
     manifest=json.loads((tmp_path/'output/manifest.json').read_text(encoding='utf-8'))
     rows=[json.loads(x) for x in (tmp_path/'output/results.jsonl').read_text(encoding='utf-8').splitlines()]
     assert manifest['corpus']==str(final) and manifest['decision_sha256']==benchmark.digest(path)
+    assert manifest['decision_selected_candidate']==value['selected_candidate']
+    assert manifest['candidate']==args.candidate and manifest['comparison_role']==role
+    assert json.loads(path.read_text(encoding='utf-8'))==value
     assert len(rows)==1 and rows[0]['case']=='synthetic_case' and rows[0]['outcome']=='ok'
     assert (tmp_path/'output/synthetic_case-r00.wav').exists()
+
+
+@pytest.mark.parametrize('kind',['empty','not_list','duplicate','empty_name','unknown_role','candidate_outside','selected_outside'])
+def test_invalid_comparison_roster_keeps_final_corpus_closed(tmp_path,monkeypatch,kind):
+    cohort=tmp_path/'synthetic-cohort';cohort.mkdir();final=cohort/'test.pt-BR.json'
+    final.write_text('SENTINEL: this is deliberately not JSON',encoding='utf-8')
+    value=decision()
+    value['comparison_roster']=[dict(candidate='synthetic-candidate',role='finalist'),dict(candidate='Qwen',role='baseline')]
+    if kind=='empty':value['comparison_roster']=[]
+    elif kind=='not_list':value['comparison_roster']={}
+    elif kind=='duplicate':value['comparison_roster'].append(dict(candidate='Qwen',role='baseline'))
+    elif kind=='empty_name':value['comparison_roster'][1]['candidate']='  '
+    elif kind=='unknown_role':value['comparison_roster'][1]['role']='winner'
+    elif kind=='candidate_outside':
+        value['selected_candidate']='Qwen';value['comparison_roster']=[dict(candidate='Qwen',role='baseline')]
+    elif kind=='selected_outside':value['selected_candidate']='outside-candidate'
+    path=tmp_path/'synthetic-decision.json';path.write_text(json.dumps(value),encoding='utf-8')
+    monkeypatch.setattr(benchmark,'HERE',cohort)
+    original=Path.read_text;opened=[]
+    def guarded_read(self,*args,**kwargs):
+        if self==final:
+            opened.append(self);raise AssertionError('Final corpus opened for invalid comparison roster')
+        return original(self,*args,**kwargs)
+    monkeypatch.setattr(Path,'read_text',guarded_read)
+    monkeypatch.setattr(benchmark,'private_output',lambda *args:pytest.fail('Output/benchmark began for invalid roster'))
+    with pytest.raises(ValueError):benchmark.run(arguments(tmp_path,path))
+    assert opened==[]

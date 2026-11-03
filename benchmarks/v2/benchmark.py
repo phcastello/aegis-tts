@@ -170,14 +170,36 @@ def private_output(value):
     path.mkdir(parents=True,exist_ok=False,mode=0o700)
     return path
 
+def validate_final_decision(path,candidate):
+    """Validate authorization before any held-out corpus read; no model imports."""
+    if not path:raise ValueError('final test requires pre-recorded --decision file')
+    decision=json.loads(Path(path).read_text())
+    required={'material_ttfa_gain_ms','max_wer_regression_pp','identity_rejection_rule','selected_candidate','validation_evidence'}
+    if not isinstance(decision,dict):raise ValueError('decision file must be an object')
+    if not required<=decision.keys():raise ValueError('decision file lacks: '+str(sorted(required-decision.keys())))
+    if 'comparison_roster' not in decision:
+        if decision['selected_candidate']!=candidate:raise ValueError('decision candidate mismatch')
+        return decision
+    roster=decision['comparison_roster']
+    if not isinstance(roster,list) or not roster:raise ValueError('comparison_roster must be a nonempty list')
+    names=set()
+    for entry in roster:
+        if not isinstance(entry,dict):raise ValueError('comparison_roster entries must be objects')
+        name=entry.get('candidate')
+        if not isinstance(name,str) or not name.strip():raise ValueError('comparison_roster candidate must be a nonempty name')
+        if name in names:raise ValueError('duplicate comparison_roster candidate: '+name)
+        names.add(name)
+        if entry.get('role') not in ('baseline','finalist'):raise ValueError('comparison_roster role must be baseline or finalist')
+    selected=decision['selected_candidate']
+    if not isinstance(selected,str) or selected not in names:raise ValueError('selected_candidate is outside comparison_roster')
+    if candidate not in names:raise ValueError('decision candidate is outside comparison_roster')
+    return decision
+
 def run(args):
     os.umask(0o077);endpoint(args.endpoint)
+    decision=None
     if args.final_test:
-        if not args.decision:raise ValueError('final test requires pre-recorded --decision file')
-        decision=json.loads(Path(args.decision).read_text())
-        required={'material_ttfa_gain_ms','max_wer_regression_pp','identity_rejection_rule','selected_candidate','validation_evidence'}
-        if not required<=decision.keys():raise ValueError('decision file lacks: '+str(sorted(required-decision.keys())))
-        if decision['selected_candidate']!=args.candidate:raise ValueError('decision candidate mismatch')
+        decision=validate_final_decision(args.decision,args.candidate)
     corpus=HERE/('test.pt-BR.json' if args.final_test else 'validation.pt-BR.json')
     cases=json.loads(corpus.read_text())
     if args.case:cases=[c for c in cases if c['id'] in args.case]
@@ -196,6 +218,9 @@ def run(args):
         audio_retention='first repetition per case plus every failed PCM response',cold_evidence=args.cold_evidence,
         cold_evidence_sha256=digest(args.cold_evidence) if args.cold_evidence else None,
         decision_sha256=digest(args.decision) if args.decision else None,scope='client HTTP final output; connection establishment included; no warm-up sent/discarded')
+    if decision is not None:
+        manifest.update(decision_selected_candidate=decision['selected_candidate'],
+            comparison_role=next((entry['role'] for entry in decision.get('comparison_roster',[]) if entry['candidate']==args.candidate),None))
     atomic_json(out/'manifest.json',manifest);rows=[]
     order=[(rep,case) for rep in range(args.repetitions) for case in cases]
     if args.shuffle:random.Random(args.seed).shuffle(order)
