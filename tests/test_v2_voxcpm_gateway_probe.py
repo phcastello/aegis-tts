@@ -1,5 +1,6 @@
 """Small CPU probes for the GPU executor's isolation and artifact failure modes."""
 import io
+import argparse
 import json
 import os
 import signal
@@ -19,6 +20,7 @@ def test_default_plan_does_not_probe_gpu_start_service_or_resolve_venv_interpret
     assert value['gpu_executed'] is False and value['service_launched'] is False
     assert value['python']==str(probe.PYTHON)
     assert value['matrix'].startswith('seven validation')
+    assert value['startup_ms']==0 and value['candidate'].endswith('-startup0ms')
 
 
 def test_child_environment_contains_only_narrow_overlay_and_gateway(tmp_path,monkeypatch):
@@ -26,6 +28,20 @@ def test_child_environment_contains_only_narrow_overlay_and_gateway(tmp_path,mon
     value=probe.child_environment(SimpleNamespace(overlay=tmp_path/'deps'))
     assert value['PYTHONPATH']==os.pathsep.join((str(tmp_path/'deps'),str(probe.REPO/'gateway')))
     assert value['PYTHONNOUSERSITE']=='1'
+    assert value['AEGIS_TTS_STREAM_STARTUP_MS']=='0'
+
+
+@pytest.mark.parametrize('value',[0,320,500])
+def test_startup_reserve_propagates_to_child_and_candidate(tmp_path,value):
+    amount=probe.startup_ms(value)
+    args=SimpleNamespace(overlay=tmp_path/'deps',startup_ms=amount,frontend='original-nfc')
+    assert probe.child_environment(args)['AEGIS_TTS_STREAM_STARTUP_MS']==str(value)
+    assert probe.candidate_name(args).endswith(f'-startup{value}ms')
+
+
+@pytest.mark.parametrize('value',[-1,501,'nan','inf','-inf','invalid'])
+def test_startup_reserve_rejects_invalid_values_before_any_execution(value):
+    with pytest.raises(argparse.ArgumentTypeError):probe.startup_ms(value)
 
 
 def test_complete_wav_contract_rejects_truncated_tail_and_header_only():

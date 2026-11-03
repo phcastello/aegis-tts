@@ -868,7 +868,7 @@ def _runtime_headers() -> dict[str, str]:
             "X-Aegis-TTS-Backend-State": getattr(getattr(app.state,"vox_backend",None),"state","not_started"),
             "X-Aegis-TTS-Frontend": VOX_CONFIG.frontend,
             "X-Aegis-TTS-DSP-Variant": "passthrough" if VOX_CONFIG.dsp == "passthrough" else "world-w04-p07-m02-" + INITIAL_SEGMENT,
-            "X-Aegis-TTS-Runtime-Variant": "experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-" + VOX_CONFIG.frontend + "-cacheguard5s-age15s-onset-" + ONSET_TRIM}
+            "X-Aegis-TTS-Runtime-Variant": "experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-" + VOX_CONFIG.frontend + "-cacheguard5s-age15s-onset-" + ONSET_TRIM + f"-startup{STREAM_STARTUP_MS:g}ms"}
     return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT, "X-Aegis-TTS-DSP-Variant": INITIAL_SEGMENT,
             "X-Aegis-TTS-Runtime-Variant": RUNTIME_VARIANT}
 

@@ -12,6 +12,7 @@ import http.client
 import importlib.util
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -113,8 +114,21 @@ def verify_overlay(overlay):
 def child_environment(args):
  env=os.environ.copy();env.update(PYTHONPATH=os.pathsep.join((str(args.overlay),str(REPO/'gateway'))),
   PYTHONNOUSERSITE='1',OMP_NUM_THREADS='2',MKL_NUM_THREADS='2',OPENBLAS_NUM_THREADS='2',
-  HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_DATASETS_OFFLINE='1')
+  HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',HF_DATASETS_OFFLINE='1',
+  AEGIS_TTS_STREAM_STARTUP_MS=f'{getattr(args,"startup_ms",0.):g}')
  return env
+
+
+def startup_ms(value):
+ try:amount=float(value)
+ except (ValueError,TypeError) as error:raise argparse.ArgumentTypeError('startup-ms must be finite and between0 and500') from error
+ if not math.isfinite(amount) or not 0<=amount<=500:
+  raise argparse.ArgumentTypeError('startup-ms must be finite and between0 and500')
+ return amount
+
+
+def candidate_name(args):
+ return f'voxcpm2-lora-gateway-{args.frontend}-startup{args.startup_ms:g}ms'
 
 
 def cpu_check(args):
@@ -313,7 +327,7 @@ def execute(args):
   frontend=args.frontend)
  config_path=args.run/'runtime.private.json';save(config_path,config)
  env=child_environment(args);env.update(AEGIS_TTS_BACKEND='voxcpm2',AEGIS_VOXCPM_CONFIG=str(config_path),
-  AEGIS_TTS_ONSET_TRIM='off',AEGIS_TTS_STREAM_STARTUP_MS='0',AEGIS_TTS_PROFILE_LATENCY='1',
+  AEGIS_TTS_ONSET_TRIM='off',AEGIS_TTS_PROFILE_LATENCY='1',
   AEGIS_TTS_SOURCE_COMMIT=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip())
  front={'original-nfc':'OriginalNFC','f5-refinement-1':'F5Refinement1','ptbr-numbers-v1':'PtbrNumbers1'}[args.frontend]
  profile=f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-Passthrough-{front}-Experimental'
@@ -322,7 +336,8 @@ def execute(args):
  recipe=dict(utc=dt.datetime.now(dt.timezone.utc).isoformat(),code_hashes=code_hashes,runner_sha256=sha(__file__),
   checkpoint=dict(path=str(args.checkpoint),sha256=args.checkpoint_sha256,step=receipt.get('step')),working=usage,
   planned_extra_bytes=extra,config_sha256=sha(config_path),command=command,
-  frontend=args.frontend,scope='Experimental HTTP gateway; service warmup3 noncorpus calls only; no per-case warmup; final corpus unopened')
+  frontend=args.frontend,startup_ms=args.startup_ms,candidate=candidate_name(args),
+  scope='Experimental HTTP gateway; service warmup3 noncorpus calls only; no per-case warmup; final corpus unopened')
  save(args.run/'recipe.json',recipe)
  process=None;identity=None;logger=LimitedLog(args.run/'gateway.log');log_thread=None;stop=threading.Event();watch=None;startup_sampler=None
  try:
@@ -382,7 +397,7 @@ def execute(args):
   status,_,body=complete_request(args.port,'/metrics');(args.run/'metrics-before.txt').write_bytes(body)
   benchmark=args.run/'benchmark'
   command=[str(args.python),str(REPO/'benchmarks/v2/benchmark.py'),'run','--endpoint',f'http://127.0.0.1:{args.port}/v1/audio/speech',
-   '--candidate','voxcpm2-lora-gateway-'+args.frontend,'--output',str(benchmark),'--repetitions','3','--condition','warm',
+   '--candidate',candidate_name(args),'--output',str(benchmark),'--repetitions','3','--condition','warm',
    '--sample-gpu','--expected-pids',str(process.pid),'--cold-evidence',str(args.run/'startup.json')]
   with (args.run/'benchmark.log').open('wb') as output:
    completed=subprocess.run(command,cwd=REPO,env=env,stdout=output,stderr=subprocess.STDOUT,timeout=2400)
@@ -416,7 +431,7 @@ def execute(args):
    if row['repetition']==0:
     from gateway.aegis_speech.experimental_text import normalizer_for
     normalizer=normalizer_for(args.frontend)
-    jobs.append(dict(candidate='voxcpm2-lora-gateway-'+args.frontend,case=row['case'],wav=str(benchmark/row['wav']),
+    jobs.append(dict(candidate=candidate_name(args),case=row['case'],wav=str(benchmark/row['wav']),
      expected_verbatim=corpus[row['case']]['text'],expected_spoken=spoken[row['case']],
      expected_effective=normalizer.normalize(corpus[row['case']]['text']).normalized_text,frontend=args.frontend,
      cohort='validation-gateway-service-only-warmup-rep0',product_audio_valid=True))
@@ -460,6 +475,7 @@ def main():
  p.add_argument('--compiler-prerequisites',type=Path,default=ROOT/'voxcpm2/compile-prereqs.json')
  p.add_argument('--checkpoint',type=Path);p.add_argument('--checkpoint-sha256')
  p.add_argument('--frontend',choices=['original-nfc','f5-refinement-1','ptbr-numbers-v1'],default='original-nfc')
+ p.add_argument('--startup-ms',type=startup_ms,default=0.)
  p.add_argument('--port',type=int,default=8002);p.add_argument('--ready-timeout',type=float,default=600)
  a=p.parse_args();os.umask(0o077);a.run=private(a.run)
  # A venv interpreter is normally a symlink to /usr/bin/python3. Resolving
@@ -471,6 +487,7 @@ def main():
  if a.action=='plan':
   value=dict(action='plan',gpu_executed=False,service_launched=False,python=str(a.python),overlay=str(a.overlay),
    pending_checkpoint=str(a.checkpoint) if a.checkpoint else None,pending_sha256=a.checkpoint_sha256,frontend=a.frontend,
+   startup_ms=a.startup_ms,candidate=candidate_name(a),
    matrix='seven validation phrases n3, service-only warmup; final six unopened',
    order=['overlay CPU import check','exclusive GPU worker','start one uvicorn8002','readiness and cold startup',
     'common HTTP benchmark without per-case warmup','WAV/PCM/firstPCM DELETE/nextcall/readiness','stop only owned uvicorn'],

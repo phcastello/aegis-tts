@@ -213,6 +213,12 @@ def test_numeric_control_expands_time_and_keeps_name_and_acronyms_literal():
     assert 'A éjis' in normalizer_for('f5-refinement-1').normalize('Aegis').normalized_text
 
 
+def test_runtime_header_declares_effective_startup_reserve(tmp_path,monkeypatch):
+    monkeypatch.setattr(gateway,'VOX_CONFIG',config(tmp_path))
+    monkeypatch.setattr(gateway,'STREAM_STARTUP_MS',320.)
+    assert gateway._runtime_headers()['X-Aegis-TTS-Runtime-Variant'].endswith('-startup320ms')
+
+
 @pytest.mark.parametrize('literal',['3.14','10.1.1.47','nome@example.org','https://example.org/teste'])
 def test_original_technical_tokens_survive_before_a_later_sentence(literal):
     source='Leia '+literal+' agora. Depois feche a porta.'
