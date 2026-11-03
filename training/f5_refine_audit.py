@@ -203,9 +203,9 @@ def finalize(root):
         stability = dict(**compare(ordinary, repeat), left_seed=ordinary['seed'], right_seed=repeat['seed'],
                          note='one second seed on ordinary sentence; limited sensitivity check')
     duration = None
-    if 'long-budget90' in by_id and 'original-long-16' in by_id:
-        duration = dict(**compare(by_id['original-long-16'], by_id['long-budget90']),
-                        note='100% legacy and90% corrected decoding differ at onset; complete text retained; not a crop or selected default')
+    if 'long-budget90' in by_id and 'long-budget100' in by_id:
+        duration = dict(**compare(by_id['long-budget100'], by_id['long-budget90']),
+                        note='100% and90% neural budgets, same corrected context decoder; complete text retained; not a crop or selected default')
     report = dict(schema='aegis.f5.refinement.technical.v1', utc=datetime.now(timezone.utc).isoformat(),
                   device='cpu', seal=seal, acoustic_method=METHOD, observations=output,
                   input_receipt_sha256={name: digest(root / name) for name in ('preflight.json', 'gpu-complete.json', 'results.json', 'asr.json', 'qwen/results.json', 'operations/gpu-window.json', 'operations/restored.json', 'operations/baseline.json')},
