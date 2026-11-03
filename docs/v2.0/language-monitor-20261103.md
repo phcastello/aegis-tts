@@ -1,5 +1,10 @@
 # Monitor local do estágio de idioma VITS
 
+Agenda inicial do supervisor: revisão às07:12UTC e primeira época estimada
+por volta de07:22UTC em03/11/2026. São horários de revisão/previsão, não prazo
+de interrupção do treino. Cada época completa dispara ASR local automaticamente;
+o gate de idioma precede qualquer decisão de especialização ou identidade.
+
 `training/v2_language_monitor.py` acompanha somente o treino em
 `/var/tmp/aegis-v2-work/vits/language`. Verifica progresso/processo/fila a cada
 30 segundos, grava heartbeat a cada30 minutos e mede o orçamento físico a
