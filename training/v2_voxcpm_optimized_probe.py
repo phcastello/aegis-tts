@@ -29,6 +29,16 @@ ROOT=Path('/var/tmp/aegis-v2-work')
 def utc():return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
+def build_trials(cases,repetitions,optimize):
+    if not cases or len(cases)!=len(set(cases)):raise ValueError('Unique, nonempty validation cases required')
+    if repetitions<3:raise ValueError('At least3 warmed repetitions required')
+    warmup=[]
+    for index,case in enumerate(cases):
+        first=('compile-first' if optimize else 'cold-first') if index==0 else 'case-first'
+        warmup.extend([(first,case,-1),('warmup1',case,-1),('warmup2',case,-1)])
+    return warmup+[('warm',case,rep) for rep in range(repetitions) for case in cases]
+
+
 def fold_lora(model,torch):
     """Remove all low-rank branches; preserve checkpoint/base files unchanged."""
     changed=[]
@@ -173,7 +183,7 @@ def configure_cache(args):
     tempfile.tempdir=str(cache/'tmp')
     receipt=ROOT/'voxcpm2/compile-prereqs.json'
     if receipt.exists():
-        info=json.loads(receipt.read_text())
+        info=json.loads(receipt.read_text(encoding='utf-8'))
         if info.get('headers',{}).get('manifest_sha256')!=pilot.sha(Path(info['headers']['manifest'])):
             raise ValueError('Compiler-header manifest changed')
         os.environ.update(info.get('env_for_child_only',{}))
@@ -205,7 +215,7 @@ def require_idle_cpu():
         try:
             tokens=(proc/'cmdline').read_bytes().decode(errors='replace').split('\0')
             if not any(x.endswith('asr_score.py') for x in tokens):continue
-            state=(proc/'stat').read_text().split(') ',1)[1].split()[0]
+            state=(proc/'stat').read_text(encoding='utf-8').split(') ',1)[1].split()[0]
             if state not in ('T','Z'):active.append(int(proc.name))
         except (FileNotFoundError,PermissionError,ProcessLookupError):continue
     if active:raise RuntimeError('Pause/wait for CPU ASR before speed probe; active PIDs='+repr(active))
@@ -214,18 +224,24 @@ def require_idle_cpu():
 def execute(args):
     parent=Path(f'/proc/{os.getppid()}/cmdline').read_bytes().decode(errors='replace')
     if 'v2_gpu_worker' not in parent:raise RuntimeError('GPU execution must be a private GPU-worker job')
+    if (args.run/'recipe.json').exists() or (args.run/'results.jsonl').exists():
+        raise ValueError('Use a fresh run directory; existing inference evidence must not be overwritten or mixed acrossNFE/precision')
     if not (ROOT/'pause-asr').exists():raise RuntimeError('Create pause-asr and confirm CPU ASR suspended before this benchmark')
     require_idle_cpu();pilot.verify(args);pilot.guard_gpu(args)
     cache=configure_cache(args);inventory=working_usage()
+    from training.v2_language_monitor import physical_usage
+    initial_cache=physical_usage([cache])
     estimated_extra=max(1024**3,(args.cache_limit_mib+256)*1024**2)
     if inventory['allocated_bytes']+estimated_extra>40_000_000_000:raise RuntimeError('Insufficient working budget for declared compile/output peak')
     if shutil.disk_usage(args.run).free<5*1024**3+estimated_extra:raise RuntimeError('Need5GiB reserve plus declared compile margin')
     pilot.atomic_json(args.run/'preflight.json',dict(utc=utc(),working=inventory,estimated_extra_bytes=estimated_extra,
                         cache_limit_mib=args.cache_limit_mib,headers_receipt=str(ROOT/'voxcpm2/compile-prereqs.json'),
+                        compile_cache_before=initial_cache,
                         CUDA_VISIBLE_DEVICES=os.environ.get('CUDA_VISIBLE_DEVICES'),asr_idle=True))
     stop=threading.Event();watch=threading.Thread(target=budget_watch,args=(args,stop,inventory),daemon=True);watch.start()
     torch,cls,lora_cls,*_=pilot.imports(args)
     import numpy as np
+    torch.set_float32_matmul_precision(args.matmul_precision)
     if args.checkpoint and args.topology=='base':raise ValueError('Base topology must not silently drop an adapter checkpoint')
     begin=time.perf_counter();previous=torch.get_default_dtype()
     lora=None if args.topology=='base' else lora_cls(enable_lm=True,enable_dit=True,enable_proj=False,r=args.rank,alpha=args.rank,dropout=0.)
@@ -238,7 +254,7 @@ def execute(args):
             if p.requires_grad:p.data=p.data.float()
     adapter_sha=None
     if args.checkpoint:
-        expected=json.loads(args.checkpoint.with_suffix('.sha256.json').read_text())['sha256']
+        expected=json.loads(args.checkpoint.with_suffix('.sha256.json').read_text(encoding='utf-8'))['sha256']
         adapter_sha=pilot.sha(args.checkpoint)
         if expected!=adapter_sha:raise ValueError('Adapter checkpoint hash mismatch')
         state=torch.load(args.checkpoint,map_location='cpu',weights_only=False)
@@ -262,15 +278,23 @@ def execute(args):
         if not all(targets.values()):raise RuntimeError('Official optimize silently/partially disabled: '+repr(targets)+' '+optimize_warnings)
     else:targets=compiled_targets(model)
     manifest=dict(utc=utc(),source_rev=pilot.SOURCE_REV,model_rev=pilot.MODEL_REV,code_sha256=pilot.sha(__file__),
+                  synthesis_helper_sha256=pilot.sha(pilot.__file__),
+                  validation_corpus_sha256=pilot.sha(REPO/'benchmarks/v2/validation.pt-BR.json'),
                   topology=args.topology,optimize_requested=args.optimize,compiled_wrappers=targets,optimize_warnings=optimize_warnings,
                   adapter_sha256=adapter_sha,lora_layer_count=sum(m.__class__.__name__=='LoRALinear' for m in model.modules()),
                   folded_layers=folded,model_load_ms=loaded_ms,residency=resident,
-                  inference=dict(nfe=10,cfg=2.,seed=40733133,max_len=400,retry_badcase=False,normalization=False,denoising=False),
+                  inference=dict(nfe=args.nfe,inference_timesteps=args.nfe,
+                                 nfe_label='upstream timestep argument; default CFGZeroStar skips first estimator call',
+                                 source_default_use_cfg_zero_star=True,
+                                 expected_dit_evaluations_per_patch=args.nfe-max(1,int((args.nfe+1)*.04)),
+                                 cfg=2.,seed=40733133,max_len=400,retry_badcase=False,retry_badcase_ratio_threshold=6.,normalization=False,denoising=False),
                   arithmetic=dict(float32_matmul_precision=torch.get_float32_matmul_precision(),
-                                  matmul_allow_tf32=torch.backends.cuda.matmul.allow_tf32,cudnn_allow_tf32=torch.backends.cudnn.allow_tf32),
+                                  requested_float32_matmul_precision=args.matmul_precision,
+                                  matmul_allow_tf32=torch.backends.cuda.matmul.allow_tf32,cudnn_allow_tf32=torch.backends.cudnn.allow_tf32,
+                                  TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=os.environ.get('TORCH_ALLOW_TF32_CUBLAS_OVERRIDE')),
                   delivery='whole file; final24k PCM after resample_poly Kaiser10; no HTTP or hypothetical streaming TTFA')
     pilot.atomic_json(args.run/'recipe.json',manifest)
-    corpus={r['id']:r for r in json.loads((REPO/'benchmarks/v2/validation.pt-BR.json').read_text())}
+    corpus={r['id']:r for r in json.loads((REPO/'benchmarks/v2/validation.pt-BR.json').read_text(encoding='utf-8'))}
     if set(args.cases)-set(corpus):raise ValueError('Only fixed validation cases allowed')
     records=[]
     ar_counts={'base_lm':0,'residual_lm':0}
@@ -279,6 +303,10 @@ def execute(args):
         def counted_step(*a,_name=name,_original=original,**kw):
             ar_counts[_name]+=1;return _original(*a,**kw)
         module.forward_step=counted_step
+    estimator_calls=[0];original_estimator=model.feat_decoder.estimator.forward
+    def counted_estimator(*a,**kw):
+        estimator_calls[0]+=1;return original_estimator(*a,**kw)
+    model.feat_decoder.estimator.forward=counted_estimator
     replay_count=[0];original_replay=torch.cuda.CUDAGraph.replay
     def counted_replay(graph,*a,**kw):
         replay_count[0]+=1;return original_replay(graph,*a,**kw)
@@ -286,8 +314,7 @@ def execute(args):
     try:
         # First call includes lazy compile. Next2 calls allow graph warmup and
         # recording; none are relabeled as warmed benchmark observations.
-        trials=[('compile-first' if args.optimize else 'cold-first',args.cases[0],-1),('warmup1',args.cases[0],-1),('warmup2',args.cases[0],-1)]
-        trials += [('warm',case,rep) for rep in range(args.repetitions) for case in args.cases]
+        trials=build_trials(args.cases,args.repetitions,args.optimize)
         for condition,case,rep in trials:
             # The replay hook proves actual execution during cold/warmup only;
             # restore the class before all timed warm repetitions.
@@ -296,12 +323,19 @@ def execute(args):
             torch.compiler.cudagraph_mark_step_begin()
             args.text=corpus[case]['text'];label=f'{condition}-{case}-r{rep:02d}'
             before_counts=ar_counts.copy()
+            before_estimator=estimator_calls[0]
             row=pilot.synthesize(args,model,torch,np,label)
             row.update(condition=condition,case=case,repetition=rep,topology=args.topology,optimize_requested=args.optimize,
+                       matmul_precision=args.matmul_precision,
                        ar_forward_steps={k:ar_counts[k]-before_counts[k] for k in ar_counts},
+                       dit_estimator_calls=estimator_calls[0]-before_estimator,
                        cudagraph_replays_observed_warmup=replay_count[0],
                        diagnostics=diagnostics(torch) if args.optimize else {})
             steps=row['ar_forward_steps']['base_lm']
+            row['text_token_count']=len(model.text_tokenizer(args.text))
+            row['effective_ar_length_cap']=min(row['text_token_count']*6+10,400)
+            row['potential_length_cap_hit']=steps>=row['effective_ar_length_cap']
+            row['eos_semantics']='Length-cap guard only; normal stop prediction does not prove complete pronunciation/content'
             row['amortized_native_ms_per_base_lm_step']=row['native_ms']/steps if steps else None
             row['step_cost_scope']='whole native call divided by counted AR forward_step calls; includes prefill/DiT/VAE, not isolated kernel timing'
             residency(model,torch);records.append(row)
@@ -314,14 +348,21 @@ def execute(args):
         import statistics
         summary={}
         for case in args.cases:
-            selected=[r for r in records if r['condition']=='warm' and r['case']==case and r.get('outcome')=='ok']
-            summary[case]=dict(n=len(selected),eof_p50_ms=statistics.median(r['eof_ms'] for r in selected) if selected else None,
-                              rtf_p50=statistics.median(r['rtf'] for r in selected) if selected else None,
+            observed=[r for r in records if r['condition']=='warm' and r['case']==case]
+            selected=[r for r in observed if r.get('outcome')=='ok' and r.get('first_speech_pcm_available_ms') is not None]
+            cap_hits=sum(r['potential_length_cap_hit'] for r in selected)
+            rtf=statistics.median(r['rtf'] for r in selected) if selected else None
+            summary[case]=dict(n=len(selected),observations=len(observed),failed_or_no_speech=len(observed)-len(selected),
+                              eof_p50_ms=statistics.median(r['eof_ms'] for r in selected) if selected else None,
+                              rtf_p50=rtf,potential_length_cap_hits=cap_hits,
+                              speed_gate_passed=bool(len(selected)>=3 and len(selected)==len(observed) and rtf<1 and not cap_hits),
+                              speed_gate_scope='Performance triage only; omitting/repeating/shortened speech still requires common ASR/audio checks',
                               max_vram_allocated_mib=max((r['peak_allocated_mib'] for r in selected),default=None),p95=None)
-        pilot.atomic_json(args.run/'summary.json',dict(cases=summary,diagnostics=diag,compile_and_warmup_separate=True,
+        pilot.atomic_json(args.run/'summary.json',dict(cases=summary,diagnostics=diag,nfe=args.nfe,matmul_precision=args.matmul_precision,
+                         compile_and_warmup_separate=True,warmup_policy='3 excluded calls for EVERY case before the warm matrix',
                          cudagraph_replays_observed_warmup=replay_count[0],cudagraph_execution_verified=replay_count[0]>0,
-                         replay_proof='process-local CUDAGraph.replay wrapper during first3 calls; restored before warm benchmark',
-                         quality='No auditory or identity claims; paired audio/ASR required; do not lowerNFE to claim a win'))
+                         replay_proof='process-local CUDAGraph.replay wrapper during per-case warmups; restored before all warm benchmark observations',
+                         quality='NFE/precision ablations are new inference configurations; no quality equivalence, hearing or identity claims; common audio/ASR required'))
     finally:
         torch.cuda.CUDAGraph.replay=original_replay
         stop.set();watch.join(2)
@@ -335,16 +376,22 @@ def main():
     p.add_argument('--topology',choices=['base','lora','merged'],default='base');p.add_argument('--optimize',action='store_true')
     p.add_argument('--checkpoint',type=Path);p.add_argument('--rank',type=int,default=8);p.add_argument('--gpu-authorized',action='store_true')
     p.add_argument('--cache-limit-mib',type=int,default=512);p.add_argument('--repetitions',type=int,default=3)
-    p.add_argument('--cases',nargs='+',default=['v_command','v_reply','v_question']);a=p.parse_args();os.umask(0o077)
+    p.add_argument('--nfe',type=int,choices=[10,6,4],default=10)
+    p.add_argument('--matmul-precision',choices=['highest','high'],default='highest',help='Separate TF32 ablation; highest is measured control')
+    p.add_argument('--cases',nargs='+',default=['v_reply']);a=p.parse_args();os.umask(0o077)
     if a.repetitions<3:p.error('At least3 warm repetitions per case are required')
     if a.rank<1 or a.cache_limit_mib<1:p.error('Positive rank and compile-cache cap required')
+    build_trials(a.cases,a.repetitions,a.optimize)
     a.run.mkdir(parents=True,exist_ok=True,mode=0o700)
     if a.action=='plan':
         value=dict(source_rev=pilot.SOURCE_REV,code_sha256=pilot.sha(__file__),actions=['CPU imports/tiny merge proof only now','Later exclusive fresh-process base-eager','base official optimize','adapter eager vs merged eager/compiled'],
                    pending_gpu=True,official_compile=dict(targets=4,mode='reduce-overhead',fullgraph=True,device_must_equal='cuda'),
                    topology=a.topology,optimize=a.optimize,checkpoint=str(a.checkpoint) if a.checkpoint else None,
                    compiler_cache_cap_mib=a.cache_limit_mib,estimated_peak_extra_bytes=max(1024**3,(a.cache_limit_mib+256)*1024**2),
-                   inference='NFE10 CFG2 seed40733133 retained; no noise reduction to win speed',
+                   inference=dict(nfe=a.nfe,cfg=2.,seed=40733133,matmul_precision=a.matmul_precision),
+                   validation_cases=a.cases,warmup='Each case gets3 excluded calls before any warm observations',
+                   quality='NFE6/4 and TF32 high are new configurations; speed is not quality evidence',
+                   next_gate='v_reply n>=3 and RTFp50<1 without length-cap hit; only then seven-case matrix + native streaming + ASR/content/identity checks',
                    cpu_model_residency='Full CPU load proof is existing cpu-check/cpu-check.json; this action does not load weights',
                    execution_guard='private GPU-worker parent; empty GPU; all CPU ASR suspended; pause-asr present; budget<40GB incl cache')
         pilot.atomic_json(a.run/'plan.json',value);print(json.dumps(value,indent=2));return

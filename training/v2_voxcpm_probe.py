@@ -246,6 +246,8 @@ def synthesize(args,model,torch,np,label):
  import soundfile as sf
  from scipy.signal import resample_poly
  text=args.text
+ nfe=int(getattr(args,'nfe',10))
+ if nfe<1:raise ValueError('inference timesteps must be positive')
  model.eval();torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats();start=time.perf_counter()
  # Model's native generator, no normalizer/denoiser/retry or CPU weight offload.
  original_data=[(p,p.data) for p in model.parameters() if p.requires_grad]
@@ -253,14 +255,18 @@ def synthesize(args,model,torch,np,label):
   # Native generation has no outer autocast. Retain the FP32 master tensors
   # unchanged while materializing BF16 LoRA inference weights, then restore.
   for p,_ in original_data:p.data=p.data.to(torch.bfloat16)
-  values=model.generate(target_text=text,max_len=400,inference_timesteps=10,cfg_value=2.,retry_badcase=False,seed=40733133)
+  values=model.generate(target_text=text,max_len=400,inference_timesteps=nfe,cfg_value=2.,retry_badcase=False,
+                        retry_badcase_ratio_threshold=6.,seed=40733133)
  finally:
   for p,data in original_data:p.data=data
  values=np.asarray(values,dtype=np.float32).reshape(-1)
  torch.cuda.synchronize();native_ms=(time.perf_counter()-start)*1000
  final=resample_poly(values,1,2,window=('kaiser',10)).astype(np.float32)
  finite=bool(np.isfinite(final).all());peak=float(abs(final).max()) if finite and final.size else None
- row=dict(text=text,native_ms=native_ms,final_sample_rate=24000,native_sample_rate=48000,peak=peak,
+ row=dict(text=text,native_ms=native_ms,nfe=nfe,inference_timesteps=nfe,
+  nfe_label='upstream inference_timesteps argument, not a measured estimator-evaluation count',
+  cfg_value=2.,seed=40733133,max_len=400,retry_badcase=False,retry_badcase_ratio_threshold=6.,
+  final_sample_rate=24000,native_sample_rate=48000,peak=peak,
   outside_unit=int((abs(final)>1).sum()) if finite else None,peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,
   peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20,scope='whole-file native engine incl resample/PCM/WAV close; no HTTP',
   streaming='native generator supports streaming but this pilot measures whole file only')
