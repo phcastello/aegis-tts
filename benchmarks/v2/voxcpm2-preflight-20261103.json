@@ -1,0 +1,181 @@
+{
+  "schema": "aegis.voxcpm2.preflight.v1",
+  "source_commit": "cce58a5b59303c9bd63d12f23afe6a49a4a80c59",
+  "model_revision": "32279effe8c19989596f05d353d1447f51d9e915",
+  "license_code": "Apache-2.0",
+  "license_weights_card": "Apache-2.0",
+  "license_card_sha256": "c18d2ffbfb2f0aec770481c967842aee6c200cde65f6b033efd892a849986fda",
+  "weights": [
+    {
+      "name": "model.safetensors",
+      "bytes": 4580080592,
+      "sha256": "f7f964cfa9da23653baec6e6f7750719977ad944ed9f95fe52fe3a620506891d",
+      "seconds": 162.2881250870414,
+      "source": "official pinned HF revision; remote LFS SHA checked",
+      "status": "verified local final"
+    },
+    {
+      "name": "audiovae.pth",
+      "bytes": 376951122,
+      "sha256": "94b5d51e107e0507d4acc976cfdadb64edd6fd06d1f751dadbf2fd1594274bf1",
+      "seconds": 15.67261802777648,
+      "source": "official pinned HF revision; remote LFS SHA checked",
+      "status": "verified local final"
+    }
+  ],
+  "metadata": [
+    {
+      "name": "config.json",
+      "bytes": 4336,
+      "sha256": "405f0dcd92f7feba6011ed4eac5c8d4f74cba9712f07fd5cfa3063bbdd95402c",
+      "git_blob": "792f1c223ed607f9e508c0a0deb15dd9532483be"
+    },
+    {
+      "name": "special_tokens_map.json",
+      "bytes": 1632,
+      "sha256": "068594063e37662c02b21acf42ebb334ef6a74fb810e68a2368f88f08351de76",
+      "git_blob": "8619dda6f3eb6d60d0a1bb274820054e46f41699"
+    },
+    {
+      "name": "tokenization_voxcpm2.py",
+      "bytes": 2895,
+      "sha256": "84489ea32b6ee0cae22ed5480cacb6df85c46624c3119be9a2021c3649a12729",
+      "git_blob": "e7d768677298d058fa6ef8b160e3ca4430997fad"
+    },
+    {
+      "name": "tokenizer.json",
+      "bytes": 3676772,
+      "sha256": "f8984687e4a92a3503d521396d454b7d68e9fdaab2a0288eb3536c7c1aa4bc20",
+      "git_blob": "41a5c2a8dba4058dd1ad73fb898abf5e4f64f0f9"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "bytes": 5059,
+      "sha256": "e78a3ebb48a0b9437efd1823b6b726c823da89e49dd8bcc90c02419d9baa772b",
+      "git_blob": "fecf4cdae73b57053cac2ad34c67febbe4e4f08b"
+    }
+  ],
+  "CPU_full_load": {
+    "status": "pass",
+    "scope": "strict full CPU load + one real LoRALinear autocast/backward; no full-model forward/optimizer/GPU",
+    "seconds": 42.16172413993627,
+    "base_keys": 889,
+    "lora_tensors": 384,
+    "lora_parameters": 4521984,
+    "parameter_elements_by_dtype": {
+      "torch.bfloat16": 2290004544,
+      "torch.float32": 98735938
+    },
+    "lora_activation_dtype": "torch.bfloat16",
+    "cuda_initialized": false,
+    "peak_cpu_rss_bytes": 10975297536,
+    "code_sha256": "f141f57173c51a3e0d39748a161b6e6a546915f212761fb921b9f1a42cf275ae"
+  },
+  "CPU_VAE_load": {
+    "load": "pass strict=True",
+    "seconds": 1.5584310539998114,
+    "missing_keys": [],
+    "unexpected_keys": [],
+    "parameters": 94213954,
+    "encoder_rate": 16000,
+    "decoder_rate": 48000,
+    "hop_length": 640,
+    "cuda_initialized": false,
+    "peak_cpu_rss_bytes": 1568886784,
+    "scope": "load-only CPU; no roundtrip or inference audio; whole Vox model not instantiated"
+  },
+  "weights_header": {
+    "status": "whole file verified against immutable remote LFS SHA and local reread; header dimensions inspected",
+    "model_parameter_elements_by_dtype": {
+      "BF16": 2290004544
+    },
+    "model_tensor_payload_bytes_by_dtype": {
+      "BF16": 4580009088
+    },
+    "r8_lora_parameters": 4521984,
+    "target_linear_layers": 192,
+    "header_bytes": 71496
+  },
+  "independent_packing_checkpoint_review": {
+    "packing": [
+      {
+        "input_samples": 9600,
+        "audio_patches": 4,
+        "packed_length": 9,
+        "checks": {
+          "tokens_match": true,
+          "masks_partition": true,
+          "audio_loss_only": true,
+          "stop_exactly_last_audio": true,
+          "features_shape": true,
+          "zero_features_text": true,
+          "expected_audio_patches": true
+        }
+      },
+      {
+        "input_samples": 9601,
+        "audio_patches": 4,
+        "packed_length": 9,
+        "checks": {
+          "tokens_match": true,
+          "masks_partition": true,
+          "audio_loss_only": true,
+          "stop_exactly_last_audio": true,
+          "features_shape": true,
+          "zero_features_text": true,
+          "expected_audio_patches": true
+        }
+      },
+      {
+        "input_samples": 96000,
+        "audio_patches": 38,
+        "packed_length": 43,
+        "checks": {
+          "tokens_match": true,
+          "masks_partition": true,
+          "audio_loss_only": true,
+          "stop_exactly_last_audio": true,
+          "features_shape": true,
+          "zero_features_text": true,
+          "expected_audio_patches": true
+        }
+      }
+    ],
+    "checkpoint_closure": {
+      "wrapped_layers": 2,
+      "frozen_input": true,
+      "output": 6.0,
+      "distinct_layer_gradients": [
+        3.0,
+        2.0
+      ],
+      "pass": true
+    },
+    "scope": "CPU small fake VAE and two tiny decoder layers; actual pinned packer and actual runner checkpoint wrapper; no acoustic weights loaded/GPU used"
+  },
+  "versions": {
+    "torch": "2.6.0+cu118",
+    "torchaudio": "2.6.0+cu118",
+    "transformers": "4.49.0",
+    "einops": "0.8.2",
+    "librosa": "0.11.0",
+    "pydantic": "2.14.2",
+    "safetensors": "0.8.0",
+    "soundfile": "0.14.0"
+  },
+  "project_after_download_bytes": 35268435968,
+  "volume_free_after_download_bytes": 28286521344,
+  "current_probe_sha256": "2c0090a59d3339a1610d8e81577165078d06c63d47da3008546d3ed9f0f1a16d",
+  "fetch_sha256": "6e6bc3fbeaec6189008a9a835f4d114cffb0873ae0cc6fd68d000146671ff1b7",
+  "post_CPU_check_changes": "Only additional VAE roundtrip finite/nonempty/exact padded length check, with failed raw FLOAT preservation; loader/LoRA/autocast paths unchanged. Exact CPU-validated source retained privately.",
+  "unmeasured": [
+    "full-model forward/backward",
+    "actual optimizer update and checkpoint/resume",
+    "full model GPU residency and VRAM",
+    "AudioVAE acoustic roundtrip",
+    "PT-BR pronunciation and robotic identity",
+    "latency and RTF on A2000"
+  ],
+  "cuda_used": false,
+  "installed_packages": []
+}
