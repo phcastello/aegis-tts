@@ -500,7 +500,7 @@ class Monitor:
         return all(sha(path) == self.policy[name] for name, path in self.files.items()) and sha(__file__) == self.policy['monitor']
 
     def budget_roots(self):
-        return sorted(Path('/var/tmp').glob('aegis*')) + [Path('/home/phc/aegis-tts/dataset_final_124_7ppm.zip'), REPO, Path('/home/phc/.cache')]
+        return sorted(Path('/var/tmp').glob('aegis*')) + [Path('/home/phc/aegis-tts/dataset_final_124_7ppm.zip'), REPO, Path('/home/phc/.cache'), Path('/home/phc/aegis-tts/.git')]
 
     def budget_ok(self, fresh=False):
         if (self.root / 'pause-asr').exists():

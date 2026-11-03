@@ -42,6 +42,11 @@ margem. O cálculo usa o maior estado conhecido mais16MiB, limitado ao cap,
 desconta apenas inodes já alocados e adiciona256MiB auxiliares. Também exige
 orçamento global≤40GB e5GiB livres no volume além da reserva. Uma recusa de
 orçamento impede captura/ASR novos e solicita revisão; não descarta o modelo.
+O inventário inclui também `/home/phc/aegis-tts/.git`: o worktree isolado usa
+esse armazenamento compartilhado, que ficava fora da contagem anterior.
+Após essa correção, os54 testes stdlib conjuntos passaram novamente. A função
+de pontuação mantém a mesma AST da versão validada com recibos reais; o
+monitor continua sem lançamento real.
 
 O vínculo de saúde identifica o processo Piper real após `exec`, com
 UID/PPID/PID/start, worker GPU e boot. ASR tem sessão própria e vínculo de

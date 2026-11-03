@@ -1,6 +1,7 @@
 """Decision gating uses synthetic files; never open the held-out project corpus."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,6 +10,13 @@ import pytest
 SPEC=importlib.util.spec_from_file_location('aegis_v2_final_gate_test_module',Path(__file__).resolve().parents[1]/'benchmarks/v2/benchmark.py')
 benchmark=importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(benchmark)
+
+
+@pytest.fixture(autouse=True)
+def restore_process_umask():
+    previous=os.umask(0o077);os.umask(previous)
+    try:yield
+    finally:os.umask(previous)
 
 
 def decision():
