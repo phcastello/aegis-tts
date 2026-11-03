@@ -1,0 +1,45 @@
+# Piper PT-BR: rota treinável e lacunas
+
+Hipótese: uma base Piper já especializada em PT-BR, com eSpeak `pt-br` e decoder treinável, poderá preservar a pronúncia ao aprender a Aegis; avançar somente após base inédita inteligível, reconstrução do alvo, update/retomada e nova síntese na A2000.
+
+**Decisão desta triagem:** Cadu ou Faber são pilotos locais concretos; nenhum foi medido novamente nem substitui a linha Coqui/CV sob o mesmo nome. Priorizar uma base por vez. Cadu reaproveita a receita histórica local; Faber oferece receita/manifests públicos adicionais. Não há evidência para ordenar a qualidade pela quantidade de passos.
+
+## Artefatos públicos completos
+
+Repositório oficial `datasets/rhasspy/piper-checkpoints`, revisão `f0a4c43d31b4e533feac35ae3ac25a56eebab8e8`:
+
+| Base, um locutor / 22.050 Hz | Checkpoint | Bytes | SHA256 publicado no LFS |
+| --- | --- | ---: | --- |
+| Cadu medium | `pt/pt_BR/cadu/medium/epoch=5195-step=109116.ckpt` | 845.888.150 | `abd3e6c7237aca5b7cf9c3cfc50945bfef44a83a594e00186f584d9d11fd355a` |
+| Faber medium | `pt/pt_BR/faber/medium/epoch=6159-step=1230728.ckpt` | 845.898.392 | `9a7a3817b079ac7786782cee14a3deb739b8cc5bfd3c08ef3abb62b5cffe712a` |
+| Jeff medium | `pt/pt_BR/jeff/medium/epoch=5462-step=118728.ckpt` | 845.888.150 | `906b7e53ca2ce4564411615904a6d7b90c5bce8d15ae519cbb895005231219e3` |
+
+Os URLs reproduzíveis usam `https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/REVISAO/CAMINHO`. Os hashes acima ainda **não** foram recalculados sobre arquivos completos nesta etapa. O [índice oficial de pré-treinos](https://github.com/rhasspy/piper/blob/73c04d81d5590ecc46e522de3601ce7fb29fc2be/notebooks/pretrained_models.json) também aponta Faber.
+
+HTTP206 confirmou três objetos ZIP PyTorch reais. Foram lidos somente os primeiros 524.288 bytes por arquivo; `data.pkl` completo cabe nesse intervalo. A inspeção usa opcodes e desserializador restrito a metadados, sem importar Torch, executar classes externas ou carregar storages. Cada checkpoint possui 784 tensores nomeados, encoder textual, posterior, fluxo, SDP, decoder e discriminador; há dois otimizadores e schedulers. As chaves/shapes dos três coincidem. Estados do gerador somam 23.663.792 elementos, discriminador 46.747.132; são metadados, não medição de VRAM. Faber registra Lightning1.7.7; Cadu/Jeff2.5.1. A receita original Faber contém 1.150 falas e não fornece duração; não corresponde ao corpus Edresson de oito horas usado agora. [Receita Faber](https://huggingface.co/datasets/rhasspy/piper-checkpoints/blob/f0a4c43d31b4e533feac35ae3ac25a56eebab8e8/pt/pt_BR/faber/medium/train.sh).
+
+## Frontend e implementação
+
+Os configs pinados usam `pt-br`, 256 embeddings e IPA por ponto Unicode. Faber mapeia 152 símbolos; Cadu/Jeff161, mantendo os IDs anteriores. Os três contêm nasalização U+0303 no ID141. BOS1/pad0/EOS2 e padding intercalado precisam permanecer idênticos. A fonte antiga conta fonemas ausentes e continua descartando-os: o adaptador deve converter isso em falha explícita. Cobertura de símbolos não comprova pronúncia de nomes, números ou palavras novas.
+
+Edresson-low é16k, mapa130, e não tem U+0303. Essa ausência foi conferida diretamente no config; a [issue oficial350](https://github.com/OHF-Voice/piper1-gpl/issues/350) relata perda de nasalização no runtime1.8. Não foi localizado checkpoint completo: repo oficial, busca HF, perfil Edresson e mirrors `speaches-ai`/`csukuangfj` consultados fornecem somente ONNX para essa voz. Não há recuperação demonstrada de posterior/alinhamento a partir desses ONNX. O [autor do corpus](https://github.com/Edresson/TTS-Portuguese-Corpus) oferece links históricos para DCTTS/Tacotron/GlowTTS, arquiteturas distintas; o download pequeno do notebook GlowTTS retornou404. Nenhuma base Piper PT-BR derivada de LJSpeech/domínio público foi confirmada nesta busca limitada.
+
+A fonte MIT antiga está fixada em `rhasspy/piper@73c04d81d5590ecc46e522de3601ce7fb29fc2be`; a continuação OHF é GPL3. A receita local anterior fixa `OHF-Voice/piper1-gpl@639388b6317fc4731e91d53da42aea68fd4166ff`, versão1.8.0. Reutilizar o ambiente F5 Python3.12/Torch2.6, com overlay isolado e sem reinstalar Torch, é uma rota a testar. Instalar literalmente o pacote antigo exige Torch<2/Lightning1.7 e não serve nesse ambiente. `piper-phonemize1.1.0` não publica wheel Linux3.12. Já `piper-tts1.8.0` publica wheel Linux abi3 de34.131.442 bytes com eSpeak; o extra treino acrescenta Lightning/Cython e utilitários. [Metadados PyPI1.8](https://pypi.org/project/piper-tts/1.8.0/), [phonemize1.1](https://pypi.org/project/piper-phonemize/1.1.0/).
+
+Modelo/losses podem ser carregados por fonte e loop próprio; isso precisa de prova de compatibilidade, não foi executado. eSpeak NG é GPL3 e deve ter versão/dados vinculados à receita. A rota histórica pré-fonemiza em processo isolado para evitar a corrupção nativa observada ao reinicializar eSpeak no trainer; fixa `vowel_clusters=None` e o mapa original, em vez de aceitar defaults novos. [Treino upstream](https://github.com/OHF-Voice/piper1-gpl/blob/639388b6317fc4731e91d53da42aea68fd4166ff/docs/TRAINING.md), [licença MIT antiga](https://github.com/rhasspy/piper/blob/73c04d81d5590ecc46e522de3601ce7fb29fc2be/LICENSE.md), [continuação GPL](https://github.com/OHF-Voice/piper1-gpl/blob/10880972db9e0aca101fed350eadf8f49deefe9f/COPYING).
+
+## Licenças: declarações distintas
+
+Os repositórios de checkpoints/ONNX declaram MIT; os cards Cadu/Faber/Jeff declaram corpus CC0 e inicialização Lessac. [Card Faber](https://huggingface.co/datasets/rhasspy/piper-checkpoints/blob/f0a4c43d31b4e533feac35ae3ac25a56eebab8e8/pt/pt_BR/faber/medium/MODEL_CARD), [metadados dos checkpoints](https://huggingface.co/datasets/rhasspy/piper-checkpoints/blob/f0a4c43d31b4e533feac35ae3ac25a56eebab8e8/README.md).
+
+A ficha Lessac remete à licença Blizzard2013, que limita o corpus a “Research Purposes only” e exclui desenvolvimento comercial de síntese. Na [discussão271](https://github.com/rhasspy/piper/discussions/271), o mantenedor afirma “does not impose any additional licenses on the checkpoints or voice models” e não resolve a aplicação das licenças anteriores aos modelos. Portanto, corpus CC0 e badge MIT não bastam para afirmar liberação irrestrita da linhagem; tampouco esta triagem determina uma proibição dos pesos por inferência. O escopo proposto é pesquisa local, com pesos privados. Distribuição e eventual uso final permanecem uma decisão separada, apoiada em permissão relevante. [Licença primária Lessac](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html).
+
+## Histórico real, disponibilidade e próximo piloto
+
+[A coleção anterior](../audio-collection-v1.md) registra carga estrita Cadu, sete reconstruções CPU e benchmark de treino A2000: batch2/acumulação4 FP32, pico Torch2.882,68MiB, mediana0,741s/minibatch; o piloto completo não foi executado. São evidências históricas, não latência de fala ou identidade aprovada. O relatório posterior manteve Piper descartado; esta pesquisa não transforma aquela decisão numa aprovação nova. `training/train_piper.py`, `frontend_check.py`, `reconstruct.py`, `evaluate_piper.py` e `piper_adapter.py` são insumos existentes, sujeitos a nova revisão do estado completo/retomada e frontend.
+
+Arquivos reais remanescentes: `/var/tmp/aegis-tts-training-20261101/config-{training,onnx}.json` (4.814/5.040 bytes), fonte parcial em `upstream/`, e `/var/tmp/aegis-piper-lightning.py`. Não foram encontrados pesos Cadu/Faber/Jeff ou ONNX de voz nos caminhos acessíveis `/home/phc`, `/var/tmp`, `/srv`, `/opt`, `/mnt`, usando nomes e tamanhos exatos sem ler pesos. Não há mount adicional de projeto. Imagens gateway existem, mas não foram exportadas nem percorridas; seus layers opacos continuam sem confirmação. A configuração preservada não equivale a pesos recuperáveis.
+
+Próximo gate: obter somente o ONNX Cadu62.950.044B/config, se for necessário o primeiro baseline CPU; aplicar mapa exato e sete frases de validação, textos crus/refinados identificados, ganho automático desativado. Só então obter **um** checkpoint completo e verificar SHA; repetir inferência PyTorch estrita, reconstrução de alvo reservado e piloto3updates→salvar→processo novo→update4. Qualificar idioma antes de especializar a Aegis; usar o corpus público existente somente se o gate revelar deficiência concreta. Não duplicar oito horas de WAVs/cache; reamostrar das fontes escolhidas em fluxo ou cache limitado e preservar splits. Repetir mesma validação de idioma após adaptação vocal. Nenhum resultado local de áudio novo foi produzido nesta triagem.
+
+Com trabalho em36,4GB e teto40GB, um checkpoint público0,846GB mais last/best/temporário completos podem consumir quase toda a margem antes de features. O piloto3→4 com best=last e dois arquivos de retomada pode caber, mas treino prolongado exige liberar espaço e recalcular pico. Recebimentos, prefixos ZIP, estruturas e inventário estão em `/var/tmp/aegis-v2-work/piper-research/` (~3MB). Nenhum ambiente foi instalado, peso completo baixado, CUDA acionada ou commit criado.
