@@ -1,5 +1,10 @@
 # API de produção
 
+A integração opcional VoxCPM2 permanece experimental e usa perfil v2 próprio;
+seus limites e gate pendente estão na
+[receita isolada da porta8002](v2.0/voxcpm-gateway-experimental-20261103.md).
+O padrão e os contratos de produção abaixo continuam Qwen/v1.
+
 Base URL padrão: `http://127.0.0.1:8001`.
 
 O gateway fixa o perfil `AegisVoicev1.0-Q00-W04-P07-M02`, Q00, WORLD W04,

@@ -98,14 +98,14 @@ A seleção dos dados e o QC podem ser repetidos com `jobs.json` e
 `benchmarks/v2/asr_score.py` no ambiente F5 documentado.
 
 
-Atualização12:59UTC: a linha FastPitch longa usa a última seleção da tabela,
+Atualização 12:59 UTC: a linha FastPitch longa usa a última seleção da tabela,
 congelada antes do treino. A auditoria encontrou linhas com IDs/textos
 conflitantes e duplicatas adicionais; o cache inicial foi desqualificado.
-Foram quarentenados47/70/1430/828 e agrupadas/deduplicadas as falas2142/2252,
+Foram quarentenados 47/70/1430/828 e agrupadas/deduplicadas as falas 2142/2252,
 sem alterar os arquivos originais. `portuguese/fastpitch-input-v1` e
 `fastpitch/portuguese-features-clean-v1/qualification.json` fixam manifestos
 e hashes. A contagem de cobertura acima pertence à seleção anterior.
-Na seleção limpa efetivamente treinada. uma nova contagem por sequências de letras
+Na seleção limpa efetivamente treinada, uma nova contagem por sequências de letras
 Unicode/casefold produziu 55.892 ocorrências e 11.169 tipos;
 marcas ortográficas: ã 2090, õ 436, ç 1803, nh 556, lh 511, rr 465, ss 1173.
 Continuam sendo indícios escritos, sem aprovação fonética. O recibo privado

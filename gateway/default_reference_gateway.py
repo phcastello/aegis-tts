@@ -35,6 +35,14 @@ from aegis_speech.segmentation import SpeechSegmenter
 from aegis_speech.service import BusyError, QueueFullError, Runtime, SpeechService
 
 
+BACKEND_KIND = os.environ.get("AEGIS_TTS_BACKEND", "qwen")
+if BACKEND_KIND not in {"qwen", "voxcpm2"}:
+    raise ValueError("AEGIS_TTS_BACKEND must be qwen or voxcpm2")
+VOX_CONFIG = None
+if BACKEND_KIND == "voxcpm2":
+    from voxcpm_runtime import VoxConfig
+    VOX_CONFIG = VoxConfig.read(os.environ["AEGIS_VOXCPM_CONFIG"])
+
 BACKEND_URL = os.environ.get("AEGIS_VLLM_BACKEND_URL", "http://127.0.0.1:8091")  # operational endpoint only
 PROTECTED_ROOT = Path("/protected")
 DEFAULT_AUDIO_PATH = PROTECTED_ROOT / "reference/Aninha_AegisVoice4.wav"
@@ -49,6 +57,9 @@ SAMPLE_RATE = 24000
 PROCESSING_MODE = "streaming"
 VOICE_PROFILE = "AegisVoicev1.0-Q00-W04-P07-M02"
 NATIVE_PROFILE = "AegisVoicev1.0"
+if VOX_CONFIG is not None:
+    from voxcpm_runtime import NATIVE_PROFILE
+    VOICE_PROFILE = VOX_CONFIG.profile
 INITIAL_SEGMENT = os.environ.get("AEGIS_TTS_INITIAL_SEGMENT", "stable")
 PROFILE_LATENCY = os.environ.get("AEGIS_TTS_PROFILE_LATENCY") == "1"
 PROFILE_LATENCY_FLAG = Path("/tmp/aegis-tts-profile-latency")
@@ -191,6 +202,27 @@ def _check_dsp_imports() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if VOX_CONFIG is not None:
+        from voxcpm_runtime import VoxBackend
+        from aegis_speech.experimental_text import OriginalTextNormalizer, OriginalTextSegmenter, RefinedTextNormalizer
+        if VOX_CONFIG.dsp == "world-w04-p07-m02":
+            _check_dsp_imports()
+            AcousticStreamProcessor(SAMPLE_RATE, initial_segment=INITIAL_SEGMENT)
+        app.state.vox_backend = VoxBackend(VOX_CONFIG)
+        app.state.metrics = GatewayMetrics()
+        app.state.normalizer = OriginalTextNormalizer() if VOX_CONFIG.frontend == "original-nfc" else RefinedTextNormalizer()
+        app.state.segmenter = OriginalTextSegmenter()
+        app.state.service = SpeechService(_segment_adapter,
+            allow_replace_all=os.environ.get("AEGIS_ALLOW_REPLACE_ALL") == "1",
+            stream_startup_seconds=STREAM_STARTUP_MS / 1000)
+        await app.state.service.start()
+        await app.state.vox_backend.start()
+        try:
+            yield
+        finally:
+            await app.state.service.stop()
+            await app.state.vox_backend.close()
+        return
     if PROCESSING_MODE not in {"streaming", "offline", "bypass"}:
         raise RuntimeError("AEGIS_VOICE_PROCESSING_MODE must be streaming, offline, or bypass")
     _verify_protected_assets()
@@ -401,6 +433,8 @@ def _response_headers(upstream: httpx.Response) -> dict[str, str]:
 
 
 async def _backend_healthy() -> bool:
+    if VOX_CONFIG is not None:
+        return app.state.vox_backend.is_ready
     try:
         response = await app.state.client.get("/health")
     except httpx.HTTPError:
@@ -410,6 +444,8 @@ async def _backend_healthy() -> bool:
 
 async def _warmup() -> bool:
     """Warm Q00/reference internals without exposing an audio response."""
+    if VOX_CONFIG is not None:
+        return app.state.vox_backend.is_ready
     if app.state.warmed:
         return True
     async with app.state.warm_lock:
@@ -498,6 +534,8 @@ def _native_request(payload: dict[str, Any]) -> SpeechRequest:
     response_format = payload.get("response_format", "pcm" if stream else "wav")
     if not isinstance(stream, bool) or response_format not in {"pcm", "wav"}:
         raise _native_error(422, "UNSUPPORTED_FORMAT", request_id)
+    if VOX_CONFIG is not None and stream and response_format != "pcm":
+        raise _native_error(422, "UNSUPPORTED_FORMAT", request_id, "streaming requires headerless pcm")
     metadata = payload.get("metadata", {})
     if not isinstance(metadata, dict) or set(metadata) - {"conversation_id", "source", "trace_id"} or any(not isinstance(v, str) or len(v) > 256 for v in metadata.values()):
         raise _native_error(422, "INVALID_REQUEST", request_id, "invalid metadata")
@@ -517,6 +555,23 @@ async def _dsp_call(function: Any, *args: Any) -> Any:
 
 async def _segment_adapter(segment: SpeechSegment, cancelled: asyncio.Event) -> AsyncIterator[bytes]:
     """One Qwen request per text segment; acoustic settings remain server-owned."""
+    if VOX_CONFIG is not None:
+        from voxcpm_adapter import processed_stream
+        source = processed_stream(app.state.vox_backend, segment.normalized_text, cancelled,
+            dsp=VOX_CONFIG.dsp, onset_trim=ONSET_TRIM, initial_segment=INITIAL_SEGMENT)
+        try:
+            async for block in source:
+                app.state.metrics.values["aegis_audio_emitted_seconds_total"] += len(block) / (SAMPLE_RATE * 2)
+                yield block
+        finally:
+            await source.aclose()
+            if _profile_latency_enabled():
+                runtime = app.state.service.runtimes.get(segment.request_id)
+                if runtime:
+                    app.state.service.event(runtime, "experimental_backend_profiled",
+                        segment_index=segment.segment_index, backend="voxcpm2", dsp=VOX_CONFIG.dsp, frontend=VOX_CONFIG.frontend,
+                        **app.state.vox_backend.numeric_metrics())
+        return
     started = perf_counter()
     stamps: dict[str, float] = {}
     upstream_request = _segment_upstream_request(segment.normalized_text)
@@ -727,6 +782,8 @@ async def ready() -> Response:
 
 @app.get("/metrics")
 async def metrics() -> PlainTextResponse:
+    if VOX_CONFIG is not None:
+        app.state.metrics.values.update(app.state.vox_backend.numeric_metrics())
     service = app.state.service
     active = 1 if service.active_id else 0
     queued = sum(1 for item in service.runtimes.values() if item.request.status == RequestStatus.QUEUED)
@@ -749,6 +806,9 @@ async def metrics() -> PlainTextResponse:
 
 @app.get("/v1/models")
 async def models() -> Response:
+    if VOX_CONFIG is not None:
+        return Response(content=json.dumps({"object":"list","data":[{"id":VOICE_PROFILE,
+            "object":"model","owned_by":"aegis-experimental"}]}),media_type="application/json")
     try:
         upstream = await app.state.client.get("/v1/models")
     except httpx.HTTPError:
@@ -759,6 +819,8 @@ async def models() -> Response:
 async def _submit_native(payload: dict[str, Any]) -> Runtime:
     validation_started = perf_counter()
     speech = _native_request(payload)
+    if VOX_CONFIG is not None and not app.state.vox_backend.is_ready:
+        raise _native_error(503, "BACKEND_NOT_READY", speech.request_id)
     validation_ms = (perf_counter() - validation_started) * 1000
     try:
         normalizing_started = perf_counter()
@@ -777,6 +839,13 @@ async def _submit_native(payload: dict[str, Any]) -> Runtime:
     except ValueError as exc:
         raise _native_error(422, "SEGMENTATION_FAILED", speech.request_id) from exc
     segments = [SpeechSegment(speech.request_id, item.segment_index, item.original_text, item.normalized_text, SegmentStatus.QUEUED, max(1.0, len(item.normalized_text) / 80), original_span=item.original_span, normalized_span=item.normalized_span, split_reason=item.split_reason) for item in drafts]
+    if VOX_CONFIG is not None:
+        from voxcpm_runtime import BackendTextTooLong
+        try:
+            app.state.vox_backend.validate([segment.normalized_text for segment in segments])
+        except BackendTextTooLong as exc:
+            raise _native_error(413, "BACKEND_TEXT_TOO_LONG", speech.request_id,
+                "segment exceeds the exact tokenizer/KV reservation; no truncation") from exc
     try:
         runtime = await app.state.service.submit(speech, segments)
         if _profile_latency_enabled():
@@ -794,6 +863,12 @@ async def _submit_native(payload: dict[str, Any]) -> Runtime:
 
 
 def _runtime_headers() -> dict[str, str]:
+    if VOX_CONFIG is not None:
+        return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT,
+            "X-Aegis-TTS-Backend-State": getattr(getattr(app.state,"vox_backend",None),"state","not_started"),
+            "X-Aegis-TTS-Frontend": VOX_CONFIG.frontend,
+            "X-Aegis-TTS-DSP-Variant": "passthrough" if VOX_CONFIG.dsp == "passthrough" else "world-w04-p07-m02-" + INITIAL_SEGMENT,
+            "X-Aegis-TTS-Runtime-Variant": "experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-" + VOX_CONFIG.frontend + "-onset-" + ONSET_TRIM}
     return {"X-Aegis-TTS-Source-Commit": SOURCE_COMMIT, "X-Aegis-TTS-DSP-Variant": INITIAL_SEGMENT,
             "X-Aegis-TTS-Runtime-Variant": RUNTIME_VARIANT}
 

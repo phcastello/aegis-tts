@@ -5,6 +5,7 @@ Baseline: `aegis-tts-production-baseline-v1` (`fc1b235eadd5ccededbc8d53a535ac3d7
 | Caminho | Classificação | Referências / uso | Runtime/build/test/rollback | Ação | Risco / validação |
 | --- | --- | --- | --- | --- | --- |
 | `gateway/` | production-runtime | Compose, Dockerfile e imports Python | todos / não rollback | preservado | testes + Compose + smoke |
+| `gateway/voxcpm_*`, `gateway/aegis_speech/experimental_text.py` | experimental-runtime | somente feature flag `AEGIS_TTS_BACKEND=voxcpm2` e JSON do operador | CPU/fakes; GPU/HTTP real pendentes | opcional, sem instalar dependências na imagem original | perfil v2 distinto; Qwen padrão; [receita](v2.0/voxcpm-gateway-experimental-20261103.md) |
 | `config/pronunciation/`, `config/speech/` | production-config | CLI e documentação | runtime/teste | preservado | corpus e léxico |
 | `protected/AegisVoicev1.0/` | protected-profile | mount `/protected`, hashes, gateway | runtime/regressão | preservado | `validate-profile`; referência local fora do índice |
 | `tests/test_aegis_*`, `tests/test_vllm_*`, `tests/test_gpu_real.py` | production-test | pytest | teste | preservados/atualizados | unitário e opt-in GPU |

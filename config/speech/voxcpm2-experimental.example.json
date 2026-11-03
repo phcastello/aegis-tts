@@ -1,0 +1,19 @@
+{
+  "source": "/opt/aegis-voxcpm2/source",
+  "model": "/opt/aegis-voxcpm2/model",
+  "adapter": "/opt/aegis-voxcpm2/selected-adapter.pt",
+  "adapter_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "cache": "/var/cache/aegis-voxcpm2",
+  "gpu_lock": "/tmp/aegis-voxcpm2-gpu0.lock",
+  "compiler_prerequisites": null,
+  "dsp": "passthrough",
+  "frontend": "original-nfc",
+  "max_len": 400,
+  "capacity": 1024,
+  "nfe": 10,
+  "rank": 8,
+  "seed": 40733133,
+  "max_buffer_chunks": 2,
+  "client_stall_seconds": 10.0,
+  "cache_limit_mib": 512
+}
