@@ -1,6 +1,9 @@
 """CPU-only boundary, API dispatch and cancellation tests; no TTS model."""
 from contextlib import contextmanager
 from types import SimpleNamespace
+import os
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -36,6 +39,62 @@ class Model:
 
 
 class ReferenceControlTests(unittest.TestCase):
+    def test_fixed_equivalence_excludes_cold_mismatch_and_requires_exact_last_pair(self):
+        calls=[];saved=[]
+        def perform(case,api,rep):
+            calls.append((case,api,rep))
+            fingerprint='cold-first' if rep==0 and api=='legacy' else 'fixed-warm'
+            row=dict(outcome='ok',pcm_sha256=fingerprint,native_float32_sha256=fingerprint,native_samples=100,audio_seconds=1.)
+            return b'',row,None
+        result=probe.fixed_api_equivalence(perform,lambda c,r,p,e:saved.append((c,r,e)))
+        self.assertEqual(len(calls),18);self.assertEqual(len(saved),9)
+        self.assertTrue(all(r['exact_equal'] for r in result.values()))
+        self.assertTrue(all(not r['rounds'][0]['exact_equal'] and r['rounds'][2]['exact_equal'] for r in result.values()))
+        self.assertEqual(calls[:6],[(probe.CASES[0],a,r) for r in range(3) for a in (('legacy','cached') if r%2==0 else ('cached','legacy'))])
+
+    def test_persistent_api_difference_never_retries_until_match(self):
+        calls=[]
+        def perform(case,api,rep):
+            calls.append((case,api,rep))
+            return b'',dict(outcome='ok',pcm_sha256=api,native_float32_sha256=api,native_samples=100,audio_seconds=1.),None
+        result=probe.fixed_api_equivalence(perform,lambda *a:None)
+        self.assertEqual(len(calls),18)
+        self.assertTrue(all(not r['exact_equal'] for r in result.values()))
+
+    def test_failed_initial_call_is_not_hidden_by_equal_last_pair(self):
+        def perform(case,api,rep):
+            return b'',dict(outcome='failed' if rep==0 and api=='legacy' else 'ok',pcm_sha256='same',native_float32_sha256='same',native_samples=100,audio_seconds=1.),None
+        result=probe.fixed_api_equivalence(perform,lambda *a:None)
+        self.assertTrue(all(not r['exact_equal'] and not r['all_calls_ok'] for r in result.values()))
+
+    def test_utf8_io_under_real_ascii_locale_and_compact_unicode_error(self):
+        code=r'''
+import json,locale,sys,tempfile
+from pathlib import Path
+from training import v2_voxcpm_reference_probe as p
+assert sys.flags.utf8_mode==0
+locale.setlocale(locale.LC_CTYPE,'C')
+assert locale.getencoding().lower() in ('ansi_x3.4-1968','ascii','us-ascii')
+with tempfile.TemporaryDirectory() as d:
+ f=Path(d)/'utf8.json';value={'text':'a\u00e7\u00e3o'}
+ f.write_text(json.dumps(value,ensure_ascii=False),encoding='utf-8')
+ try:f.read_text()
+ except UnicodeDecodeError:pass
+ else:raise AssertionError('Control default read unexpectedly accepted UTF8')
+ assert p.read_json(f)==value
+ p.pilot.atomic_json(f,value)
+ assert json.loads(f.read_bytes().decode('utf-8'))==value
+e=UnicodeDecodeError('ascii',b'\xff'+b'PRIVATE_TRANSCRIPT'*200000,0,1,'invalid')
+msg=p.compact_error(e)
+assert len(msg)<=512 and 'PRIVATE_TRANSCRIPT' not in msg
+assert msg.startswith('UnicodeDecodeError:')
+assert len(p.compact_error(RuntimeError('x'*2000000)))==512
+print('ascii-locale UTF8 IO and bounded errors passed')
+'''
+        env=dict(os.environ,PYTHONUTF8='0',LC_ALL='C',CUDA_VISIBLE_DEVICES='')
+        completed=subprocess.run([sys.executable,'-c',code],cwd=probe.REPO,env=env,capture_output=True,timeout=30)
+        self.assertEqual(completed.returncode,0,(completed.stdout+completed.stderr).decode('utf-8',errors='replace')[:2000])
+
     def test_exact_boundary_covers_both_reference_markers_and_full400(self):
         self.assertEqual(probe.guard(556,reference())['reserved_slots'],1024)
         self.assertEqual(probe.guard(622,None)['reserved_slots'],1024)

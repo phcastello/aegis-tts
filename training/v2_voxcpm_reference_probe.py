@@ -34,6 +34,15 @@ OUTPUT_CAP = 128*1024**2
 RESERVE = 1024**3  #512MiB cache +128MiB output +128MiB checkpoint overlap +256MiB margin.
 
 
+def compact_error(error):
+    #UnicodeError repr includes its entire input buffer; never serialize repr.
+    return (type(error).__name__+': '+str(error))[:512]
+
+
+def read_json(path):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
 def generation(text):
     return dict(target_text=text, min_len=2, max_len=400, inference_timesteps=10,
                 cfg_value=2., retry_badcase=False, streaming_prefix_len=4, seed=40733133)
@@ -96,6 +105,25 @@ def trials():
     return warm+measured
 
 
+def fixed_api_equivalence(perform,persist):
+    """Exactly three rounds/API/case; no tolerance or repeat-until-match."""
+    result={}
+    for case in CASES:
+        rounds=[]
+        for rep in range(3):
+            pair={}
+            for api in (('legacy','cached') if rep%2==0 else ('cached','legacy')):
+                pair[api]=perform(case,api,rep)
+            a=pair['legacy'][1];b=pair['cached'][1]
+            equal=all(a[k]==b[k] for k in ('outcome','pcm_sha256','native_float32_sha256','native_samples','audio_seconds'))
+            persist(case,rep,pair,equal)
+            rounds.append(dict(round=rep,exact_equal=equal,rows=[a,b]))
+        healthy=all(row['outcome']=='ok' for round_ in rounds for row in round_['rows'])
+        result[case]=dict(exact_equal=rounds[-1]['exact_equal'] and healthy,all_calls_ok=healthy,
+                         comparison='Only last fixed round, exact FLOAT/PCM/length/outcome; all six calls must succeed',rounds=rounds)
+    return result
+
+
 def private(path):
     path=path.resolve()
     if not path.is_relative_to(ROOT):raise ValueError('Artifacts/cache must stay inside the accounted private working root')
@@ -106,17 +134,17 @@ def private(path):
 
 def bindings(args):
     data=REFERENCE.parents[1]
-    rows=[json.loads(x) for x in (data/'train.jsonl').read_text().splitlines() if x.strip()]
+    rows=[json.loads(x) for x in (data/'train.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
     found=[r for r in rows if r['id']=='aegis_ptbr_0586']
     if len(found)!=1:raise ValueError('Require unique TRAIN0586 binding')
     row=found[0]
-    val=[json.loads(x) for x in (data/'validation.jsonl').read_text().splitlines() if x.strip()]
+    val=[json.loads(x) for x in (data/'validation.jsonl').read_text(encoding='utf-8').splitlines() if x.strip()]
     if row['split']!='train' or any(r['id']==row['id'] or r['group_id']==row['group_id'] for r in val):
         raise ValueError('Reference must be TRAIN with no validation source-group overlap')
     if Path(row['audio_filepath'])!=REFERENCE or row['sha256']!=REFERENCE_SHA or pilot.sha(REFERENCE)!=REFERENCE_SHA:
         raise ValueError('TRAIN0586 WAV binding differs')
     sidecar=args.checkpoint.with_suffix('.sha256.json')
-    cp=json.loads(sidecar.read_text())
+    cp=read_json(sidecar)
     if cp['step'] not in (800,1400) or cp['sha256']!=args.checkpoint_sha256 or pilot.sha(args.checkpoint)!=args.checkpoint_sha256:
         raise ValueError('Frozen saved step800/1400 checkpoint binding differs')
     code=[Path(__file__),REPO/'training/v2_voxcpm_cache_probe.py',Path(native.__file__),
@@ -124,8 +152,8 @@ def bindings(args):
           REPO/'benchmarks/v2/validation.pt-BR.json',REPO/'gateway/aegis_speech/experimental_text.py',
           REPO/'gateway/aegis_speech/experimental_refinement.py',
           args.source/'src/voxcpm/model/voxcpm2.py',args.source/'src/voxcpm/model/utils.py']
-    revision=subprocess.check_output(['git','-C',str(args.source),'rev-parse','HEAD'],text=True).strip()
-    if revision!=pilot.SOURCE_REV or subprocess.check_output(['git','-C',str(args.source),'status','--porcelain'],text=True).strip():
+    revision=subprocess.check_output(['git','-C',str(args.source),'rev-parse','HEAD'],text=True,encoding='utf-8').strip()
+    if revision!=pilot.SOURCE_REV or subprocess.check_output(['git','-C',str(args.source),'status','--porcelain'],text=True,encoding='utf-8').strip():
         raise ValueError('Require clean pinned Vox source')
     return dict(source_revision=revision,reference_sha256=REFERENCE_SHA,reference_text_sha256=hashlib.sha256(row['text'].encode()).hexdigest(),
         reference_group=row['group_id'],reference_split='train',checkpoint_step=cp['step'],
@@ -192,7 +220,7 @@ def save_audio(args,label,pcm,raw,row):
 
 
 def execute(args):
-    parent=Path(f'/proc/{os.getppid()}/cmdline').read_bytes().decode(errors='replace')
+    parent=Path(f'/proc/{os.getppid()}/cmdline').read_bytes().decode('utf-8',errors='replace')
     if 'v2_gpu_worker' not in parent:raise RuntimeError('Exclusive owner GPU-worker execution required')
     if not (ROOT/'pause-asr').exists():raise RuntimeError('Require owner pause-asr before timing')
     if (args.run/'recipe.json').exists():raise ValueError('Fresh execution directory required')
@@ -205,7 +233,7 @@ def execute(args):
     output_check(args)
     sys.path.insert(0,str(REPO/'gateway'))
     from aegis_speech.experimental_text import normalizer_for
-    corpus={r['id']:r for r in json.loads((REPO/'benchmarks/v2/validation.pt-BR.json').read_text())}
+    corpus={r['id']:r for r in read_json(REPO/'benchmarks/v2/validation.pt-BR.json')}
     effective={case:normalizer_for('ptbr-numbers-v1').normalize(corpus[case]['text']).normalized_text for case in CASES}
     torch,cls,lora_cls,*_=pilot.imports(args)
     torch.set_float32_matmul_precision('highest')
@@ -222,6 +250,7 @@ def execute(args):
                 generation=generation('<fixed validation text>'),frontend='ptbr-numbers-v1',topology='lora-r8-BF16-unmerged',
                 matmul_precision=torch.get_float32_matmul_precision(),resampling=native.HalfRateFIR().recipe(),
                 scope='Native local client only; immediate playback, no gateway/startup320 or auditory approval',
+                api_equivalence='Fixed3 rounds per API/case,18 calls before A/B; cold calls excluded; last pair exact, no warm-until-match',
                 warmup='Three excluded calls per case/mode; n3 A/B counterbalanced, same seed',trials=trials()))
             torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats();begin=time.perf_counter()
             ref=model.build_prompt_cache(reference_wav_path=str(REFERENCE),trim_silence_vad=False)
@@ -236,21 +265,22 @@ def execute(args):
                 staging='Official API returns CPU latent inputs, packs CPU and transfers prefix per request; model/VAE/KV stay CUDA',
                 reuse='Fixed cache once; prefill/KV are recomputed each request; no merging'))
             with guarded_cache_entry(model,state):
-                for case in CASES:
+                def perform(case,api,rep):
                     kw=generation(effective[case]);guard(len(model.text_tokenizer(kw['target_text'])),None)
-                    checks=[];pairs=[]
-                    for legacy in (True,False):
-                        optimized.require_idle_cpu();torch.cuda.synchronize();torch.compiler.cudagraph_mark_step_begin()
-                        pcm,row,raw=collect(model,kw,None,legacy=legacy)
-                        row['guard']=guard(len(model.text_tokenizer(kw['target_text'])),None)
-                        checks.append(row);pairs.append((legacy,pcm,row,raw))
-                    equal=all(checks[0][k]==checks[1][k] for k in ('outcome','pcm_sha256','native_float32_sha256','native_samples','audio_seconds'))
-                    for legacy,pcm,row,raw in pairs:
-                        label='equivalence-'+case+('-legacy' if legacy else '-cached')
+                    optimized.require_idle_cpu();torch.cuda.synchronize();torch.compiler.cudagraph_mark_step_begin()
+                    pcm,row,raw=collect(model,kw,None,legacy=api=='legacy')
+                    row.update(api=api,case=case,equivalence_round=rep,excluded_from_performance=True,
+                        phase='cold-or-case-first' if rep==0 else 'fixed-api-warmup',
+                        guard=guard(len(model.text_tokenizer(kw['target_text'])),None))
+                    return pcm,row,raw
+                def persist(case,rep,pair,equal):
+                    for api,(pcm,row,raw) in pair.items():
+                        label=f'equivalence-{case}-{api}-r{rep:02d}'
                         if not equal or row['outcome']!='ok':save_audio(args,label,pcm,raw,row)
                         pilot.atomic_json(args.run/(label+'.json'),row)
-                    pilot.atomic_json(args.run/('equivalence-'+case+'.json'),dict(case=case,exact_equal=equal,rows=checks))
-                    if not equal or checks[0]['outcome']!='ok':raise RuntimeError('Zero-cache API equivalence failed: '+case)
+                equivalence=fixed_api_equivalence(perform,persist)
+                for case,verdict in equivalence.items():pilot.atomic_json(args.run/('equivalence-'+case+'.json'),dict(case=case,**verdict))
+                if not all(v['exact_equal'] for v in equivalence.values()):raise RuntimeError('Last fixed warm zero-cache API equivalence failed')
                 for condition,case,mode,rep in trials():
                     if not (ROOT/'pause-asr').exists():raise RuntimeError('Owner timing pause was removed')
                     optimized.require_idle_cpu();output_check(args);torch.cuda.synchronize();torch.cuda.reset_peak_memory_stats()
@@ -267,7 +297,7 @@ def execute(args):
                         save_audio(args,label,pcm,raw,row)
                     output_check(args,len(json.dumps(row).encode())*3+16384)
                     pilot.atomic_json(args.run/(label+'.json'),row);records.append(row)
-                    with (args.run/'results.jsonl').open('a') as f:f.write(json.dumps(row,allow_nan=False)+'\n')
+                    with (args.run/'results.jsonl').open('a',encoding='utf-8') as f:f.write(json.dumps(row,allow_nan=False)+'\n')
                     pilot.atomic_json(args.run/'progress.json',dict(utc=optimized.utc(),condition=condition,case=case,mode=mode,repetition=rep,outcome=row['outcome']))
                     optimized.residency(model,torch);capacity.cache_record(model,1024)
                     if row['outcome']!='ok' or row['potential_length_cap_hit']:raise RuntimeError('Invalid/capped native response: '+label)
@@ -282,11 +312,11 @@ def execute(args):
                 next_product_gate='If useful, all7 and actual gateway320ms with zero gaps and material TTFA gain'))
             output_check(args);status='completed_measurement'
         except BaseException as exc:
-            error=repr(exc);raise
+            error=compact_error(exc);raise
         finally:
             torch.cuda.CUDAGraph.replay=original_replay;stop.set();watch.join(2)
             try:after=bindings(args);binding_error=None
-            except Exception as exc:after=None;binding_error=repr(exc)
+            except Exception as exc:after=None;binding_error=compact_error(exc)
             pilot.atomic_json(args.run/'execution.json',dict(status=status,error=error,utc=optimized.utc(),
                 records=len(records),bindings_after=after,binding_audit_error=binding_error,
                 source_and_input_bindings_unchanged=after==before,weights_after=weights_after,
@@ -297,7 +327,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--action',choices=['plan','execute'],default='plan')
     p.add_argument('--source',type=Path,default=pilot.ROOT/'source');p.add_argument('--model',type=Path,default=pilot.ROOT/'model')
-    p.add_argument('--run',type=Path,default=pilot.ROOT/'reference0586-step800')
+    p.add_argument('--run',type=Path,default=pilot.ROOT/'reference0586-step800-warmed-api-v2')
     p.add_argument('--cache',type=Path,default=pilot.ROOT/'compile-cache')
     p.add_argument('--checkpoint',type=Path,default=CHECKPOINT);p.add_argument('--checkpoint-sha256',default=CHECKPOINT_SHA)
     p.add_argument('--gpu-authorized',action='store_true')
@@ -305,6 +335,7 @@ def main():
     a.topology='lora';a.rank=8;a.optimize=True;a.matmul_precision='highest';a.cache_limit_mib=512
     if a.action=='plan':
         plan=dict(status='prepared_only',bindings=bindings(a),source_rev=pilot.SOURCE_REV,model_rev=pilot.MODEL_REV,
+            api_equivalence='Fixed3 rounds/API/case,18 excluded calls; compare last pair strictly, no adaptive repeat',
             generation=generation('<numbers frontend, frozen validation only>'),cases=CASES,trials=trials(),
             reference=str(REFERENCE),checkpoint=str(a.checkpoint),frontend='ptbr-numbers-v1',kv_capacity=1024,
             cache_cap_mib=512,output_cap_mib=128,reserved_extra_bytes=RESERVE,

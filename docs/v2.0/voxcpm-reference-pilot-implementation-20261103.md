@@ -1,4 +1,63 @@
-# Piloto independente0586: pronto para revisão, sem execução GPU
+# Piloto0586 v2: equivalência após aquecimento fixo
+
+A primeira execução foi feita pelo worker do proprietário em03/11,17:01–17:04.
+O guard interrompeu antes da matriz de referência: primeira chamada legacy
+fria/compilando e cachedNone tiveram o mesmo comprimento3,04s, mas hashes
+diferentes. Diferença FLOAT máxima0,0002311/RMSE0,00001463; PCM máximo7LSB,
+RMS0,492LSB, concentrados em0,115–0,509s. Isso não comprova causa nem permite
+afrouxar a equivalência. Nenhum pedido condicionado B foi executado.
+
+O cache da0586 foi construído corretamente: `[64,4,64]`, FP32 CPU65.536bytes,
+3,393s frio, pico5629,5MiB e pesos/VAE/KVs integralmente na GPU. Esses dados
+descrevem engenharia; não há comparação de conteúdo ou identidade A/B.
+O treino retomou automaticamente do2000 e avançou, com delta de pesos real.
+
+A auditoria final também encontrou um bug do runner: locale ASCII após
+compilação fez a leitura sem encoding falhar. O repr de UnicodeDecodeError
+incluiu o buffer privado inteiro em um recibo local. Esse recibo original
+permanece privado e não deve ser publicado. A nova fonte usa UTF-8 explícito
+em toda E/S textual própria e mensagem de exceção limitada a512caracteres,
+sem repr. Uma conferência independente após o abort verificou todos os
+hashes correntes contra a receita anterior; isso não substitui a auditoria
+que falhou no instante original.
+
+O controle autorizado agora executa **três rodadas fixas por API/caso**, com
+ordem legacy/cached alternada:18 chamadas excluídas das métricas A/B. Compara
+somente o último par, ainda estritamente FLOAT/PCM/comprimento/outcome, e
+exige sucesso nas18 chamadas. Guarda todos os JSONs; pares diferentes e
+falhas mantêm WAVs. Não repete até coincidir nem aceita tolerância. Só após
+esse gate começam os18 warmups A/B e18 pedidos medidos anteriores.
+
+Fonte v2: `adff50ab6e8d939075968eb326033ed8edd8bcc9de32e976c079fea15e87dc8d`.
+**26 testes CPU passaram**, CUDAfalse, pico400,19MiB: incluem primeiro par
+diferente/último estável, diferenças persistentes sem chamadas adicionais,
+falha inicial que não pode ser ocultada e processo real sob locale C.
+O plano completo também passou com `PYTHONUTF8=0 LC_ALL=C` nos dados reais.
+Nenhuma execução GPU v2 foi feita por este agente; não foi criada fila.
+
+Artefatos sob `/var/tmp/aegis-v2-work/voxcpm2/`:
+
+- `reference0586-step800-warmed-api-v2/plan.json`,
+  SHA `8e49b4adf937652bf8e1db697d24b111f3ab679d4281fb4dbad131a015ed0cf5`.
+- `reference0586-control/cpu-pilot-tests-v2.json`,
+  SHA `c42dc14f62fcc38726e4d5c3f75acf79ef392da025e64cd2636453c652d616bc`.
+- `reference0586-control/failed-equivalence-cpu-diagnostic.json`,
+  SHA `0b01e982f9f2e84b2e823a946e588d1b87d7a44f903b555524d5aa473e3e0198`.
+- `reference0586-control/failed-first-cold-0fcb/`: fonte antiga copiada,
+  quatro WAVs e recibos preservados por hardlink, originais mantidos.
+
+Comando v2 candidato, apenas pelo worker em janela exclusiva:
+
+```bash
+/var/tmp/aegis-v2-evaluation-20261102/envs/f5/bin/python \
+  -m training.v2_voxcpm_reference_probe --action execute \
+  --run /var/tmp/aegis-v2-work/voxcpm2/reference0586-step800-warmed-api-v2 \
+  --gpu-authorized
+```
+
+Os defaults continuam vinculados ao mesmo CP800, referência0586 e cache512MiB.
+
+## Preparação inicial preservada como histórico
 
 `training/v2_voxcpm_reference_probe.py` prepara por padrão um plano CPU. Seu
 SHA-256 é `0fcb7652f834dbad8ac30368593d4f36673966ad6e6939ab2187c2d698556776`.
