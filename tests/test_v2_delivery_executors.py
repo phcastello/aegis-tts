@@ -1,5 +1,6 @@
 """Stdlib-only contract tests with synthetic text/PCM; no real final data or model."""
 import copy
+import ast
 import datetime as dt
 import io
 import json
@@ -30,10 +31,21 @@ class DeliveryTests(unittest.TestCase):
         self.args=SimpleNamespace(final_test=False,decision=None,corpus=None,spoken=None,candidate='fixed',repetitions=3,
                                   run=self.root/'run',action='plan',gpu_authorized=False,delivery='sentence-files',
                                   endpoint='http://127.0.0.1:8002/v1/audio/speech',profile='expected',frontend='ptbr-numbers-v1',
-                                  model_sha256='a'*64,startup_evidence=self.root/'startup.json',timeout=180.)
+                                  model_sha256='a'*64,startup_evidence=self.root/'startup.json',timeout=180.,startup_ms=320.)
         self.cases=[dict(id=f'v_{i}',text=f'Frase sintética {i}.',size='short') for i in range(7)]
         self.cohort=dict(cases=self.cases,spoken={c['id']:c['text'] for c in self.cases},case_denominator=7,final_test=False)
         self.plan=dict(cohort=self.cohort,candidate='fixed',settings=dict(scope='synthetic'),source_hashes={},created_utc='fixed')
+
+    def actual_ready_headers(self):
+        # Execute only the actual standalone header function AST, not FastAPI,
+        # runtime imports, Torch, a service, or an invented mock header schema.
+        source=protocol.REPO/'gateway/default_reference_gateway.py';tree=ast.parse(source.read_text())
+        node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_runtime_headers')
+        namespace=dict(VOX_CONFIG=SimpleNamespace(frontend=self.args.frontend,dsp='passthrough'),
+                       SOURCE_COMMIT='synthetic',app=SimpleNamespace(state=SimpleNamespace(vox_backend=SimpleNamespace(state='ready'))),
+                       INITIAL_SEGMENT='unused',ONSET_TRIM='off',STREAM_STARTUP_MS=self.args.startup_ms)
+        exec(compile(ast.Module(body=[node],type_ignores=[]),str(source),'exec'),namespace)
+        return {k.lower():v for k,v in namespace['_runtime_headers']().items()}
 
     def fake_corpus(self):
         here=self.root/'corpora';here.mkdir();(here/'validation.pt-BR.json').write_text(json.dumps(self.cases))
@@ -118,6 +130,20 @@ class DeliveryTests(unittest.TestCase):
             with patch.object(http.gateway,'complete_request',return_value=response),self.assertRaises(ValueError):http.completed_contract(self.args,row)
         for events in (b'data: "event: completed"\n',b'event: accepted\n\nevent: failed\n\nevent: completed\n'):
             with patch.object(http.gateway,'complete_request',side_effect=[good,(200,{},events)]),self.assertRaises(ValueError):http.completed_contract(self.args,row)
+        wrong=dict(row,headers=dict(row['headers'],**{'x-aegis-voice-profile':'wrong-real-profile'}))
+        with patch.object(http.gateway,'complete_request',side_effect=AssertionError('Bad profile reached status request')),self.assertRaisesRegex(ValueError,'profile/frontend'):http.completed_contract(self.args,wrong)
+
+    def test_readiness_uses_actual_runtime_header_schema_and_preserves_speech_profile_contract(self):
+        headers=self.actual_ready_headers();self.assertNotIn('x-aegis-voice-profile',headers)
+        receipt=http.readiness_contract(self.args,200,headers);self.assertEqual(receipt['runtime_headers']['x-aegis-tts-backend-state'],'ready')
+        for key,value in [('x-aegis-tts-backend-state','loading'),('x-aegis-tts-frontend','wrong'),('x-aegis-tts-dsp-variant','wrong'),('x-aegis-tts-runtime-variant','wrong'),('x-aegis-voice-profile','wrong')]:
+            with self.subTest(header=key),self.assertRaisesRegex(ValueError,'Readiness contract'):http.readiness_contract(self.args,200,dict(headers,**{key:value}))
+        with self.assertRaisesRegex(ValueError,'Readiness contract'):http.readiness_contract(self.args,503,headers)
+        source=protocol.REPO/'gateway/voxcpm_runtime.py';tree=ast.parse(source.read_text());cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='VoxConfig')
+        getter=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='profile');getter.decorator_list=[];namespace={}
+        exec(compile(ast.Module(body=[getter],type_ignores=[]),str(source),'exec'),namespace)
+        args=self.launcher_args();actual_profile=namespace['profile'](SimpleNamespace(frontend=args.frontend,dsp='passthrough'))
+        self.assertEqual(actual_profile,args.profile)
 
     def test_failure_keeps_rep0_denominator_and_does_not_fabricate_effective_text(self):
         row=dict(candidate='fixed',case='v_0',repetition=0,final_test=False,outcome='failed')
@@ -167,7 +193,7 @@ class DeliveryTests(unittest.TestCase):
             if row['case']=='v_6' and row['repetition']==0:raise ValueError('synthetic failed SSE')
             return dict(status=dict(status='completed'),sse='synthetic')
         m=protocol.metrics()
-        with patch.object(protocol,'owner_guard',return_value={}),patch.object(protocol,'budget',return_value={}),patch.object(protocol,'gpu_set',return_value={}),patch.object(protocol,'audit_gpu_samples',return_value={}),patch.object(protocol,'metrics',return_value=m),patch.object(m,'GpuSampler',Sampler),patch.object(m,'receive',side_effect=receive),patch.object(http,'verified_startup',return_value=value),patch.object(http,'request_count',side_effect=[0,24]),patch.object(http,'completed_contract',side_effect=completed),patch.object(http.gateway,'complete_request',return_value=(200,{'x-aegis-voice-profile':'expected'},b'')):
+        with patch.object(protocol,'owner_guard',return_value={}),patch.object(protocol,'budget',return_value={}),patch.object(protocol,'gpu_set',return_value={}),patch.object(protocol,'audit_gpu_samples',return_value={}),patch.object(protocol,'metrics',return_value=m),patch.object(m,'GpuSampler',Sampler),patch.object(m,'receive',side_effect=receive),patch.object(http,'verified_startup',return_value=value),patch.object(http,'request_count',side_effect=[0,24]),patch.object(http,'completed_contract',side_effect=completed),patch.object(http.gateway,'complete_request',return_value=(200,self.actual_ready_headers(),b'')):
             http.execute(self.args,self.plan)
         rows=[json.loads(line) for line in (self.args.run/'results.jsonl').read_text().splitlines()]
         self.assertEqual(len(calls),24);self.assertEqual([p['input'] for p in calls[:3]],[protocol.WARMUP]*3)
@@ -192,7 +218,7 @@ class DeliveryTests(unittest.TestCase):
                      patch.object(protocol,'metrics',return_value=m),patch.object(m,'GpuSampler',Sampler),patch.object(f5,'Backend',return_value=fake),
                      patch.object(m,'receive',side_effect=lambda *_:(b'\0\x20'*2400,dict(outcome='ok',headers={},eof_ms=50.,audio_seconds=.1))),
                      patch.object(http,'verified_startup',return_value=value),patch.object(http,'request_count',side_effect=[0,24]),
-                     patch.object(http,'completed_contract',return_value={}),patch.object(http.gateway,'complete_request',return_value=(200,{'x-aegis-voice-profile':'expected'},b''))]
+                     patch.object(http,'completed_contract',return_value={}),patch.object(http.gateway,'complete_request',return_value=(200,self.actual_ready_headers(),b''))]
             with self.subTest(backend=backend_name),ExitStack() as stack:
                 for item in patches:stack.enter_context(item)
                 with self.assertRaisesRegex(RuntimeError,'Final budget guard failed'):
@@ -284,7 +310,7 @@ class DeliveryTests(unittest.TestCase):
                         patch.object(m,'GpuSampler',Sampler),patch.object(m,'gpu_snapshot',return_value=dict(processes=[])),
                         patch.object(launcher.gateway,'verify_overlay',return_value={}),patch.object(launcher.gateway,'cpu_check',return_value={}),
                         patch.object(launcher,'artifact_bindings',return_value=[]),patch.object(launcher,'child_environment',return_value={}),
-                        patch.object(launcher.gateway,'complete_request',return_value=(200,{'x-aegis-voice-profile':args.profile,'x-aegis-tts-dsp-variant':'passthrough'},b'')),
+                        patch.object(launcher.gateway,'complete_request',return_value=(200,self.actual_ready_headers(),b'')),
                         patch.object(launcher.gateway,'contracts',side_effect=contracts),
                         patch.object(launcher.socket,'socket'),patch.object(launcher.subprocess,'run',return_value=SimpleNamespace(returncode=0)),
                         patch.object(launcher.client,'execute',side_effect=client_call)]

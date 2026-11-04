@@ -114,7 +114,8 @@ def execute(args,plan):
                     polls.append(dict(elapsed_seconds=time.perf_counter()-begun,status=status))
                     if headers.get('x-aegis-tts-backend-state')=='failed':raise RuntimeError('Backend initialization failed; inspect bounded gateway.log')
                     if status==200:
-                        if headers.get('x-aegis-voice-profile')!=args.profile or headers.get('x-aegis-tts-dsp-variant')!='passthrough':raise ValueError('Readiness profile/DSP differs')
+                        protocol.save(args.run/'ready-launcher-response.json',dict(status=status,headers=headers))
+                        client.readiness_contract(args,status,headers)
                         break
                 except (OSError,http.client.HTTPException):pass
                 protocol.save(args.run/'startup-progress.json',dict(phase='startup',elapsed_seconds=time.perf_counter()-begun,pid=process.pid));time.sleep(1)

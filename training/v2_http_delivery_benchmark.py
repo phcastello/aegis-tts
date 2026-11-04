@@ -20,6 +20,7 @@ def settings(args):
     if args.timeout<=0 or not math.isfinite(args.timeout):raise ValueError('Positive finite timeout required')
     if len(args.model_sha256)!=64 or any(c not in '0123456789abcdef' for c in args.model_sha256):raise ValueError('Pinned model SHA256 required')
     return dict(endpoint=args.endpoint,voice_profile=args.profile,frontend=args.frontend,model_sha256=args.model_sha256,
+                startup_ms=getattr(args,'startup_ms',320.),voice_profile_checked_in='Every speech response/completion, not readiness',
                 startup_evidence=str(args.startup_evidence.absolute()),timeout=args.timeout,
                 backend='voxcpm2',internal_warmups='Startup receipt must record actual backend boot warmups separately',
                 seed=protocol.SEED,payload=dict(stream=True,response_format='pcm'),
@@ -111,12 +112,26 @@ def enforce_deadline(row,timeout):
         row.update(outcome='failed_deadline',error='EOF exceeded overall client deadline; measured timing/PCM preserved as failure')
     return row
 
+def readiness_contract(args,status,headers):
+    # /ready exposes _runtime_headers(), while Voice-Profile belongs to the
+    # speech-response contract. Require the actual readiness fields strictly.
+    expected={'x-aegis-tts-backend-state':'ready','x-aegis-tts-frontend':args.frontend,
+              'x-aegis-tts-dsp-variant':'passthrough',
+              'x-aegis-tts-runtime-variant':'experimental-voxcpm2-lora-r8-kv1024-nfe10-fir48to24-'+args.frontend+
+                  '-cacheguard5s-age15s-onset-off'+f"-startup{getattr(args,'startup_ms',320.):g}ms"}
+    mismatch={key:dict(expected=value,observed=headers.get(key)) for key,value in expected.items() if headers.get(key)!=value}
+    if 'x-aegis-voice-profile' in headers and headers['x-aegis-voice-profile']!=args.profile:
+        mismatch['x-aegis-voice-profile']=dict(expected=args.profile,observed=headers['x-aegis-voice-profile'])
+    if status!=200 or mismatch:raise ValueError('Readiness contract differs: '+json.dumps(dict(status=status,mismatch=mismatch),sort_keys=True))
+    return dict(status=status,runtime_headers={key:headers[key] for key in expected},voice_profile_scope='Checked on speech headers by completed_contract')
+
 def execute(args,plan):
     owner=protocol.owner_guard();startup=verified_startup(args);pid=startup['process']['pid']
     before=protocol.budget(args.run,1024**3);gpu_before=protocol.gpu_set([pid]);b=protocol.metrics()
     port=b.endpoint(args.endpoint).port
     status,headers,_=gateway.complete_request(port,'/ready')
-    if status!=200 or headers.get('x-aegis-voice-profile')!=args.profile:raise ValueError('Actual service not ready with expected profile')
+    protocol.save(args.run/'ready-client-response.json',dict(status=status,headers=headers))
+    readiness_contract(args,status,headers)
     # Mandatory boot warmups call the engine directly. Any HTTP request before
     # this counter check destroys attribution of the first external request.
     if request_count(port)!=0:raise ValueError('Fresh process already served external requests; restart before benchmark')
@@ -183,6 +198,7 @@ def main():
     parser.add_argument('--profile',required=True);parser.add_argument('--frontend',choices=('original-nfc','f5-refinement-1','ptbr-numbers-v1'),default='ptbr-numbers-v1')
     parser.add_argument('--model-sha256',required=True);parser.add_argument('--startup-evidence',type=Path,required=True)
     parser.add_argument('--timeout',type=float,default=180.)
+    parser.add_argument('--startup-ms',type=gateway.startup_ms,default=320.)
     args=parser.parse_args();os.umask(0o077)
     plan=protocol.make_plan(args,'voxcpm2-http',settings(args),[Path(__file__),Path(gateway.__file__),*[protocol.REPO/p for p in gateway.RUNTIME_FILES],
         protocol.REPO/'gateway/aegis_speech/experimental_text.py',protocol.REPO/'gateway/aegis_speech/experimental_refinement.py',
