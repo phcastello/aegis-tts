@@ -49,10 +49,12 @@ class GpuQualityTests(unittest.TestCase):
                              wav_sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
         return rows, cases
 
-    def test_only_the_two_reviewed_steps_are_valid(self):
-        for step in (10000, 16000):
+    def test_only_the_explicit_reviewed_checkpoint_steps_are_valid(self):
+        for step in (10000, 16000, 18000, 20000, 22000, 24000, 26000, 28000):
             quality.validate_step(step)
-        for step in (-1, 0, 5500, 7000, 12000, 15999, 16001, 200000):
+        for step in (-1, 0, 5500, 7000, 12000, 14000, 15999, 16001, 17999, 18001,
+                     19000, 20001, 22001, 24001, 26001, 28001, 30000, 200000,
+                     True, 10000.0, '18000', None):
             with self.subTest(step=step), self.assertRaises((ValueError, RuntimeError)):
                 quality.validate_step(step)
 

@@ -28,6 +28,8 @@ BASELINE = ROOT / 'fastpitch/common-cpu-language-control-step10000/manifest.json
 PREPARATION = ROOT / 'fastpitch/gpu-language-quality-preparation-20261104'
 SEED = 40733133
 CANONICAL_10000 = 'd23db54a42d25c27c369af43c8bc8606ab86c533116dcddb93ea642c7a4b5058'
+# Explicit future checkpoints; each still requires a new exact-SHA sealed plan.
+SUPPORTED_STEPS = (10000, 16000, 18000, 20000, 22000, 24000, 26000, 28000)
 CASE_IDS = ('v_command', 'v_reply', 'v_pressure', 'v_acronyms', 'v_question', 'v_sibilants', 'v_long')
 OUTPUT_CAP = 72_000_000
 CACHE_CAP = 256 * 1024**2
@@ -115,8 +117,9 @@ def event(output, value):
 
 
 def validate_step(step):
-    if step not in (10000, 16000):
-        raise ValueError('Only exact validation checkpoints10000/16000 are supported')
+    if type(step) is not int or step not in SUPPORTED_STEPS:
+        raise ValueError('Only exact validation checkpoints from the explicit list are supported: '
+                         + ','.join(map(str, SUPPORTED_STEPS)))
     return step
 
 
