@@ -142,7 +142,7 @@ class DeliveryTests(unittest.TestCase):
         source=protocol.REPO/'gateway/voxcpm_runtime.py';tree=ast.parse(source.read_text());cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='VoxConfig')
         getter=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='profile');getter.decorator_list=[];namespace={}
         exec(compile(ast.Module(body=[getter],type_ignores=[]),str(source),'exec'),namespace)
-        args=self.launcher_args();actual_profile=namespace['profile'](SimpleNamespace(frontend=args.frontend,dsp='passthrough'))
+        args=self.launcher_args();actual_profile=namespace['profile'](SimpleNamespace(frontend=args.frontend,dsp='passthrough',reference_wav=None))
         self.assertEqual(actual_profile,args.profile)
 
     def test_failure_keeps_rep0_denominator_and_does_not_fabricate_effective_text(self):

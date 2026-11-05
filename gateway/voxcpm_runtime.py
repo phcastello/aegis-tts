@@ -72,6 +72,8 @@ class VoxConfig:
     cache_limit_mib: int = 512
     instrument_replays: bool = False
     frontend: str = 'original-nfc'
+    reference_wav: Path | None = None
+    reference_sha256: str | None = None
 
     def __post_init__(self):
         if (self.max_len,self.capacity,self.nfe,self.rank) != (400,1024,10,8):
@@ -85,6 +87,13 @@ class VoxConfig:
         if self.cache_limit_mib != 512: raise ValueError('Validated compile cache budget is512MiB')
         if type(self.instrument_replays) is not bool: raise ValueError('instrument_replays must be boolean')
         if self.frontend not in {'original-nfc','f5-refinement-1','ptbr-numbers-v1'}:raise ValueError('Explicit experimental frontend required')
+        if (self.reference_wav is None) != (self.reference_sha256 is None):
+            raise ValueError('Acoustic reference path and SHA256 must be supplied together')
+        if self.reference_wav is not None:
+            if not isinstance(self.reference_wav,Path) or not self.reference_wav.is_absolute():
+                raise ValueError('Operator acoustic reference path must be absolute')
+            if not isinstance(self.reference_sha256,str) or not re.fullmatch('[0-9a-f]{64}',self.reference_sha256):
+                raise ValueError('Pinned acoustic reference SHA256 required')
         for name in ('source','model','adapter','cache','gpu_lock'):
             if not isinstance(getattr(self,name),Path) or not getattr(self,name).is_absolute():
                 raise ValueError('Operator paths must be absolute: '+name)
@@ -94,7 +103,7 @@ class VoxConfig:
         value=json.loads(Path(path).read_text(encoding='utf-8'))
         allowed=set(cls.__dataclass_fields__)
         if not isinstance(value,dict) or set(value)-allowed: raise ValueError('Unknown experimental backend configuration')
-        for name in ('source','model','adapter','cache','gpu_lock','compiler_prerequisites'):
+        for name in ('source','model','adapter','cache','gpu_lock','compiler_prerequisites','reference_wav'):
             if value.get(name) is not None: value[name]=Path(value[name]).resolve()
         return cls(**value)
 
@@ -102,16 +111,20 @@ class VoxConfig:
     def profile(self):
         suffix='Passthrough' if self.dsp=='passthrough' else 'W04-P07-M02'
         frontend={'original-nfc':'OriginalNFC','f5-refinement-1':'F5Refinement1','ptbr-numbers-v1':'PtbrNumbers1'}[self.frontend]
-        return f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-{suffix}-{frontend}-Experimental'
+        return f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-{suffix}-{frontend}-Experimental'+(
+            '-AcousticReference' if self.reference_wav is not None else '')
 
 
 def capacity_guard(tokens, config):
     if type(tokens) is not int or tokens < 1: raise ValueError('Nonempty exact tokenizer output required')
-    needed=tokens+config.max_len+2
+    reference_patches=64 if getattr(config,'reference_wav',None) is not None else 0
+    needed=tokens+config.max_len+2+(reference_patches+2 if reference_patches else 0)
     if needed>config.capacity:
         raise BackendTextTooLong('Segment exceeds the1024-slot text+audio reservation; no truncation')
-    return dict(text_tokens=tokens,reserved_slots=needed,capacity=config.capacity,
+    result=dict(text_tokens=tokens,reserved_slots=needed,capacity=config.capacity,
                 audio_patch_limit=min(tokens*6+10,config.max_len))
+    if reference_patches:result['reference_patches']=reference_patches
+    return result
 
 
 def verify_local(config):
@@ -131,6 +144,9 @@ def verify_local(config):
     receipt=json.loads(config.adapter.with_suffix('.sha256.json').read_text(encoding='utf-8'))
     if receipt['sha256']!=config.adapter_sha256 or receipt.get('bytes')!=config.adapter.stat().st_size:
         raise ValueError('Pinned adapter sidecar differs')
+    if config.reference_wav is not None:
+        if not config.reference_wav.is_file() or digest(config.reference_wav)!=config.reference_sha256:
+            raise ValueError('Pinned acoustic reference integrity failure')
     return receipt
 
 
@@ -291,6 +307,7 @@ class NativeSession:
         self.replays=0;self.replay_original=None;self.replay_hook=None
         self.load_observation={}
         self.cache_guard=None
+        self.prompt_cache=None;self.reference_cache_build_seconds=0.
 
     def load(self):
         config=self.config
@@ -343,6 +360,7 @@ class NativeSession:
         compiled=(model.base_lm.forward_step,model.residual_lm.forward_step,model.feat_encoder,model.feat_decoder.estimator)
         if not all(hasattr(f,'_torchdynamo_orig_callable') or hasattr(f,'_orig_mod') for f in compiled):
             raise RuntimeError('Official reduce-overhead optimization was disabled or partial')
+        self._prepare_reference()
         self.instrument_replays()
         torch.cuda.synchronize()
         self.load_observation=self.observe()
@@ -355,6 +373,28 @@ class NativeSession:
             self.replays+=1
             return self.replay_original(graph,*args,**kwargs)
         self.replay_hook=counted;self.torch.cuda.CUDAGraph.replay=counted
+
+    def _prepare_reference(self):
+        if self.config.reference_wav is None or self.prompt_cache is not None:return
+        torch=self.torch;path=self.config.reference_wav
+        signature=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+        torch.cuda.synchronize();started=time.perf_counter();before=signature(path.stat())
+        if digest(path)!=self.config.reference_sha256:raise ValueError('Acoustic reference changed before encoding')
+        cache=self.model.build_prompt_cache(reference_wav_path=str(path),trim_silence_vad=False)
+        torch.cuda.synchronize()
+        if signature(path.stat())!=before or digest(path)!=self.config.reference_sha256:
+            raise ValueError('Acoustic reference changed during encoding')
+        if not isinstance(cache,dict) or set(cache)!={'mode','ref_audio_feat'} or cache['mode']!='reference':
+            raise ValueError('Only acoustic reference cache is supported; no continuation/caption')
+        feat=cache['ref_audio_feat']
+        # The pinned API encodes through CUDA VAE, then returns CPU input
+        # latents. It repacks/transfers this prefix on every request; model
+        # weights/VAE/KV stay CUDA. Fixed shape binds the64-patch reservation.
+        if (not torch.is_tensor(feat) or tuple(feat.shape)!=(64,4,64) or feat.dtype!=torch.float32
+                or feat.device.type!='cpu' or not bool(torch.isfinite(feat).all())):
+            raise ValueError('Expected finite CPU FP32 acoustic reference features [64,4,64]')
+        self.check_residency()
+        self.prompt_cache=cache;self.reference_cache_build_seconds=time.perf_counter()-started
 
     def token_count(self,text): return len(self.model.text_tokenizer(text))
 
@@ -384,11 +424,27 @@ class NativeSession:
 
     def generate(self,text):
         self.check_budget()
+        if self.config.reference_wav is not None:
+            if self.prompt_cache is None:raise RuntimeError('Acoustic reference cache is not ready')
+            capacity_guard(self.token_count(text),self.config)
         self.before_generation=self.observe()
         self.torch.cuda.reset_peak_memory_stats()
         self.torch.compiler.cudagraph_mark_step_begin()
+        if self.config.reference_wav is not None:return self._reference_audio(text)
         return self.model.generate_streaming(target_text=text,max_len=400,inference_timesteps=10,cfg_value=2.,
             retry_badcase=False,retry_badcase_ratio_threshold=6.,trim_silence_vad=False,streaming_prefix_len=4,seed=self.config.seed)
+
+    def _reference_audio(self,text):
+        stream=None
+        try:
+            stream=iter(self.model.generate_with_prompt_cache_streaming(target_text=text,prompt_cache=self.prompt_cache,
+                max_len=400,inference_timesteps=10,cfg_value=2.,retry_badcase=False,retry_badcase_ratio_threshold=6.,
+                streaming_prefix_len=4,seed=self.config.seed))
+            for item in stream:
+                if not isinstance(item,tuple) or len(item)!=3:raise ValueError('Expected native (wav,tokens,features) tuple')
+                yield item[0]
+        finally:
+            if stream is not None and hasattr(stream,'close'):stream.close()
 
     def reset(self):
         if self.model is None:return
@@ -423,6 +479,8 @@ class NativeSession:
             values.update(compile_unique_graphs=int(counters['stats']['unique_graphs']),
                 compile_generated_kernels=int(metrics.generated_kernel_count))
         except (ImportError,AttributeError,KeyError):values['compile_counters_unavailable']=1
+        if self.prompt_cache is not None:
+            values.update(reference_cache_patches=64,reference_cache_build_seconds=self.reference_cache_build_seconds)
         return values
 
     def close(self):
@@ -431,7 +489,7 @@ class NativeSession:
             finally:
                 if self.cache_guard is not None:self.cache_guard.close()
         finally:
-            self.model=None
+            self.prompt_cache=None;self.model=None
             try:
                 if self.torch is not None:
                     import gc

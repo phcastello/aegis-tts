@@ -23,8 +23,18 @@ BASE_SHA='f7f964cfa9da23653baec6e6f7750719977ad944ed9f95fe52fe3a620506891d'
 VAE_SHA='94b5d51e107e0507d4acc976cfdadb64edd6fd06d1f751dadbf2fd1594274bf1'
 
 def decorate(args):
+    args.reference_wav=getattr(args,'reference_wav',None)
+    args.reference_sha256=getattr(args,'reference_sha256',None)
+    if (args.reference_wav is None) != (args.reference_sha256 is None):
+        raise ValueError('Acoustic reference path and SHA256 must be supplied together')
+    if args.reference_wav is not None:
+        if not isinstance(args.reference_wav,Path) or not args.reference_wav.is_absolute():
+            raise ValueError('Operator acoustic reference path must be absolute')
+        if (not isinstance(args.reference_sha256,str) or len(args.reference_sha256)!=64
+                or any(c not in '0123456789abcdef' for c in args.reference_sha256)):
+            raise ValueError('Pinned acoustic reference SHA256 required')
     args.python=args.python.absolute()  # Preserve the venv symlink/sys.prefix.
-    for name in ('run','checkpoint','source','model','cache','overlay','compiler_prerequisites'):
+    for name in ('run','checkpoint','source','model','cache','overlay','compiler_prerequisites','reference_wav'):
         path=getattr(args,name)
         if path is not None:setattr(args,name,path.resolve())
     if args.port!=8002:raise ValueError('Experimental fresh gateway restricted to port8002')
@@ -32,6 +42,7 @@ def decorate(args):
     args.endpoint='http://127.0.0.1:8002/v1/audio/speech';args.model_sha256=args.checkpoint_sha256
     front={'original-nfc':'OriginalNFC','f5-refinement-1':'F5Refinement1','ptbr-numbers-v1':'PtbrNumbers1'}[args.frontend]
     args.profile=f'AegisVoicev2.0-VoxCPM2-LoRA-r8-N10-Passthrough-{front}-Experimental'
+    if args.reference_wav is not None:args.profile+='-AcousticReference'
     args.startup_evidence=args.run/'startup-real.json';return args
 
 def build_plan(args):
@@ -40,6 +51,8 @@ def build_plan(args):
                               overlay=str(args.overlay),cache=str(args.cache),compiler_prerequisites=str(args.compiler_prerequisites),
                               startup_ms=args.startup_ms,ready_timeout=args.ready_timeout,
                               lifecycle='Worker→launcher; launcher owns uvicorn child and directly calls client.execute in same PID; always stops owned server')
+    if args.reference_wav is not None:
+        settings['launcher'].update(reference_wav=str(args.reference_wav),reference_sha256=args.reference_sha256)
     sources=[Path(__file__),Path(client.__file__),Path(gateway.__file__),*[protocol.REPO/p for p in gateway.RUNTIME_FILES],
              protocol.REPO/'gateway/aegis_speech/normalization.py',protocol.REPO/'gateway/aegis_speech/segmentation.py']
     return protocol.make_plan(args,'voxcpm2-http',settings,sources)
@@ -69,8 +82,10 @@ def stop_owned(process,expected):
 def artifact_bindings(args,config_path):
     files=[('checkpoint',args.checkpoint),('runtime_config',config_path),('base_model',args.model/'model.safetensors'),('audio_vae',args.model/'audiovae.pth')]
     files.extend(('model_metadata',args.model/name) for name in ('config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','tokenization_voxcpm2.py'))
+    if args.reference_wav is not None:files.append(('acoustic_reference',args.reference_wav))
     bindings=[dict(role=role,path=str(path),sha256=protocol.sha(path)) for role,path in files]
     expected=dict(checkpoint=args.checkpoint_sha256,base_model=BASE_SHA,audio_vae=VAE_SHA)
+    if args.reference_wav is not None:expected['acoustic_reference']=args.reference_sha256
     if any(b['role'] in expected and b['sha256']!=expected[b['role']] for b in bindings):raise ValueError('Selected/base/VAE checkpoint integrity failure')
     return bindings
 
@@ -83,6 +98,8 @@ def execute(args,plan):
     config=dict(source=str(args.source),model=str(args.model),adapter=str(args.checkpoint),adapter_sha256=args.checkpoint_sha256,
                 cache=str(args.cache),gpu_lock=str(args.run.parent/'gateway-gpu.lock'),compiler_prerequisites=str(args.compiler_prerequisites),
                 dsp='passthrough',frontend=args.frontend,instrument_replays=True,seed=protocol.SEED)
+    if args.reference_wav is not None:
+        config.update(reference_wav=str(args.reference_wav),reference_sha256=args.reference_sha256)
     config_path=args.run/'runtime.private.json';protocol.save(config_path,config);bindings=artifact_bindings(args,config_path)
     sources=protocol.source_bindings(protocol.REPO/p for p in gateway.RUNTIME_FILES)
     command=child_command(args);env=child_environment(args,config_path)
@@ -174,6 +191,7 @@ def main():
     parser.add_argument('--source',type=Path,default=protocol.ROOT/'voxcpm2/source');parser.add_argument('--model',type=Path,default=protocol.ROOT/'voxcpm2/model')
     parser.add_argument('--cache',type=Path,default=protocol.ROOT/'voxcpm2/compile-cache');parser.add_argument('--compiler-prerequisites',type=Path,default=protocol.ROOT/'voxcpm2/compile-prereqs.json')
     parser.add_argument('--frontend',choices=('original-nfc','f5-refinement-1','ptbr-numbers-v1'),default='ptbr-numbers-v1')
+    parser.add_argument('--reference-wav',type=Path);parser.add_argument('--reference-sha256')
     parser.add_argument('--startup-ms',type=gateway.startup_ms,default=320.);parser.add_argument('--port',type=int,default=8002)
     parser.add_argument('--ready-timeout',type=float,default=600.);parser.add_argument('--timeout',type=float,default=180.)
     args=decorate(parser.parse_args());os.umask(0o077);plan=build_plan(args)
