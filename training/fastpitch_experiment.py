@@ -60,6 +60,234 @@ def atomic_torch(path, value):
     os.replace(tmp, path)
 
 
+# Operational checkpoint I/O only. No model construction, forward, update or RNG restore.
+def _checkpoint_dirsync(root):
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _checkpoint_identity(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def _checkpoint_finite_cpu(value):
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if torch.is_tensor(item):
+            if item.device.type != "cpu" or ((item.is_floating_point() or item.is_complex())
+                    and not bool(torch.isfinite(item).all())):
+                raise ValueError("Checkpoint tensor is nonfinite or not CPU")
+        elif isinstance(item, np.ndarray):
+            if not bool(np.isfinite(item).all()):
+                raise ValueError("Checkpoint NumPy state is nonfinite")
+        elif isinstance(item, dict):
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend(item)
+        elif isinstance(item, float) and not math.isfinite(item):
+            raise ValueError("Checkpoint scalar is nonfinite")
+
+
+def _checkpoint_equal(actual, wanted):
+    if torch.is_tensor(wanted):
+        return (torch.is_tensor(actual) and actual.dtype == wanted.dtype
+                and tuple(actual.shape) == tuple(wanted.shape)
+                and torch.equal(actual, wanted.detach().cpu()))
+    if isinstance(wanted, np.ndarray):
+        return (isinstance(actual, np.ndarray) and actual.dtype == wanted.dtype
+                and np.array_equal(actual, wanted))
+    if isinstance(wanted, dict):
+        return (isinstance(actual, dict) and actual.keys() == wanted.keys()
+                and all(_checkpoint_equal(actual[k], v) for k, v in wanted.items()))
+    if isinstance(wanted, (tuple, list)):
+        return (type(actual) is type(wanted) and len(actual) == len(wanted)
+                and all(_checkpoint_equal(a, b) for a, b in zip(actual, wanted)))
+    return actual == wanted
+
+
+def _checkpoint_validate(state, model, full_state=True):
+    _checkpoint_finite_cpu(state)
+    weights = state["model"]
+    schema = model.state_dict()
+    if set(weights) != set(schema) or any(tuple(weights[k].shape) != tuple(v.shape)
+            or weights[k].dtype != v.dtype for k, v in schema.items()):
+        raise ValueError("Checkpoint model state schema differs")
+    if not full_state:
+        return  # --init-checkpoint imports only the model; native config checks still apply.
+    required = {"model", "optimizer", "scheduler", "scaler", "rng", "step", "epoch",
+                "cursor", "best", "bad", "config", "provenance", "lr_state"}
+    if not required <= set(state) or any(type(state[k]) is not int or state[k] < 0
+            for k in ("step", "epoch", "cursor", "bad")) or not math.isfinite(state["best"]):
+        raise ValueError("Incomplete full checkpoint/counters")
+    config = state["config"]
+    step = state["step"]
+    scheduler = state["scheduler"]
+    lr_state = state["lr_state"]
+    if (not isinstance(state["scaler"], dict) or not isinstance(scheduler, dict)
+            or not {"last_epoch", "base_lrs", "_last_lr"} <= set(scheduler)
+            or scheduler.get("last_epoch") != step):
+        raise ValueError("Checkpoint scheduler/scaler differs")
+    if not all(state["provenance"].get(k) for k in (
+            "code_sha256", "source_manifest_sha256", "upstream", "torch", "cuda", "argv", "utc")):
+        raise ValueError("Incomplete checkpoint source/runtime provenance")
+    if config["precision"] == "fp16" and not {"scale", "growth_factor", "backoff_factor",
+            "growth_interval", "_growth_tracker"} <= set(state["scaler"]):
+        raise ValueError("Incomplete FP16 scaler")
+    try:
+        from training.v2_fastpitch_checkpoint_audit import adam_layout
+    except ModuleNotFoundError as error:
+        if error.name != "training":
+            raise
+        # Direct script invocation puts training/ on sys.path, not its parent.
+        from v2_fastpitch_checkpoint_audit import adam_layout
+    checks, _ = adam_layout(state["optimizer"], list(model.named_parameters()), weights,
+                           step, torch, {"attention.attn_proj.weight", "attention.attn_proj.bias"})
+    if step == 0 and not state["optimizer"].get("state"):
+        checks = {k: v for k, v in checks.items() if k not in (
+            "optimizer_active_parameters_covered", "optimizer_complete_steps_valid")}
+    if not all(checks.values()):
+        raise ValueError("Incomplete/inconsistent Adam checkpoint: " + repr(checks))
+    selection = config["selection"]
+    reductions = lr_state["reductions"]
+    if (type(reductions) is not int or not 0 <= reductions <= selection["max_lr_reductions"]
+            or not math.isclose(lr_state["multiplier"], selection["plateau_lr_factor"] ** reductions, rel_tol=1e-10)):
+        raise ValueError("Checkpoint LR reduction state differs")
+    expected = config["lr"] * min(1., (step + 1) / config["warmup"]) * lr_state["multiplier"]
+    rates = scheduler["_last_lr"]
+    groups = state["optimizer"]["param_groups"]
+    if len(rates) != len(groups) or any(not math.isclose(g["lr"], expected, rel_tol=1e-10)
+            or not math.isclose(g["lr"], rate, rel_tol=1e-10) for g, rate in zip(groups, rates)):
+        raise ValueError("Checkpoint saved LR differs")
+    rng = state["rng"]
+    random.Random().setstate(rng["python"])
+    np.random.RandomState().set_state(rng["numpy"])
+    torch.Generator(device="cpu").set_state(rng["torch"])
+    if (not isinstance(rng["cuda"], list) or (any(p.device.type == "cuda" for p in model.parameters())
+            and not rng["cuda"]) or any(not torch.is_tensor(v) or v.device.type != "cpu"
+            or v.dtype != torch.uint8 or v.numel() == 0 for v in rng["cuda"])):
+        raise ValueError("Incomplete saved CUDA RNG")
+
+
+def _checkpoint_load(path, model, expected_sha=None, full_state=True, wanted=None):
+    # A trusted local pickle is hashed BEFORE load, then rehashed from the SAME fd.
+    import stat
+    path = Path(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.getuid():
+            raise ValueError("Expected owned regular checkpoint")
+        before = _checkpoint_identity(opened)
+        def stable():
+            return (_checkpoint_identity(os.fstat(stream.fileno())) == before
+                    and _checkpoint_identity(path.lstat()) == before)
+        digest_before = hashlib.file_digest(stream, "sha256").hexdigest()
+        allowed = {expected_sha} if isinstance(expected_sha, str) else expected_sha
+        if not stable() or (allowed is not None and digest_before not in allowed):
+            raise ValueError("Checkpoint changed or SHA differs BEFORE load")
+        stream.seek(0)
+        state = torch.load(stream, map_location="cpu", weights_only=False)
+        stream.seek(0)
+        if hashlib.file_digest(stream, "sha256").hexdigest() != digest_before or not stable():
+            raise ValueError("Checkpoint changed DURING load")
+        _checkpoint_validate(state, model, full_state)
+        if wanted is not None and not _checkpoint_equal(state, wanted):
+            raise ValueError("Checkpoint readback differs from saved snapshot")
+        if not stable():
+            raise ValueError("Checkpoint changed during CPU validation")
+        return state, digest_before
+
+
+def _checkpoint_json(path):
+    import stat
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 65536:
+            raise ValueError("Unsafe checkpoint receipt")
+        raw = stream.read(65537)
+        if len(raw) > 65536:
+            raise ValueError("Checkpoint receipt grew")
+        return json.loads(raw), raw
+
+
+def _checkpoint_best(root):
+    temp = root / "best.pt.tmp"
+    if temp.exists():
+        temp.unlink()
+    os.link(root / "last.pt", temp)
+    os.replace(temp, root / "best.pt")
+    _checkpoint_dirsync(root)
+
+
+def _checkpoint_resume(root, model):
+    path = root / "last.pt"
+    receipt_path = root / "checkpoint.json"
+    receipt, raw = _checkpoint_json(receipt_path) if receipt_path.exists() else (None, None)
+    journal = root / "checkpoint.pending.json"
+    pending, pending_raw = _checkpoint_json(journal) if journal.exists() else (None, None)
+    if pending is None and (root / "last.pt.tmp").exists():
+        raise ValueError("Unpublished checkpoint temp; preserve old last/receipt and reconcile before updates")
+    if pending is not None and (pending.get("schema") != "fastpitch.checkpoint-publication.v1"
+            or type(pending.get("is_best")) is not bool):
+        raise ValueError("Invalid checkpoint publication journal")
+    allowed = ({receipt["sha256"]} if receipt else set()) | ({pending["receipt"]["sha256"]} if pending else set())
+    if not allowed:
+        raise ValueError("Published checkpoint receipt or durable pending journal required")
+    state, digest_before = _checkpoint_load(path, model, allowed)
+    if ((receipt_path.read_bytes() if receipt_path.exists() else None) != raw or (pending is not None
+            and journal.read_bytes() != pending_raw)):
+        raise ValueError("Checkpoint receipt changed during CPU load")
+    selected = pending["receipt"] if pending and digest_before == pending["receipt"]["sha256"] else receipt
+    if any(state[k] != selected[k] for k in ("step", "epoch", "cursor", "best")):
+        raise ValueError("Checkpoint counters do not match receipt")
+    if pending is not None:
+        if selected is receipt:
+            raise ValueError("Unpublished pending checkpoint; old last remains valid. Preserve and reconcile temp/journal before retry")
+        if pending["is_best"]:
+            _checkpoint_best(root)
+        temp = root / "last.pt.tmp"
+        if temp.exists():  # Identical serialization may have crashed before rename.
+            same, _ = _checkpoint_load(temp, model, digest_before)
+            del same
+            temp.unlink()
+        atomic_json(root / "checkpoint.json", selected)
+        _checkpoint_dirsync(root)
+        journal.unlink()
+        _checkpoint_dirsync(root)
+    return state, digest_before
+
+
+def _checkpoint_publish(root, state, model, is_best=False):
+    path = root / "last.pt"
+    temp = root / "last.pt.tmp"
+    journal = root / "checkpoint.pending.json"
+    if journal.exists():
+        raise ValueError("Pending publication must be reconciled before another save")
+    with temp.open("xb") as stream:
+        torch.save(state, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    checked, digest_before = _checkpoint_load(temp, model, wanted=state)
+    del checked
+    receipt = dict(step=state["step"], epoch=state["epoch"], cursor=state["cursor"],
+                   checkpoint=str(path), sha256=digest_before, best=state["best"])
+    atomic_json(journal, dict(schema="fastpitch.checkpoint-publication.v1", receipt=receipt, is_best=bool(is_best)))
+    _checkpoint_dirsync(root)  # Durable journal before replacing the only current last.
+    os.replace(temp, path)
+    _checkpoint_dirsync(root)
+    if is_best:
+        _checkpoint_best(root)
+    atomic_json(root / "checkpoint.json", receipt)
+    _checkpoint_dirsync(root)
+    journal.unlink()
+    _checkpoint_dirsync(root)
+
+
 def append_history(path,value,max_bytes=10*1024**2):
     """Durable compact metrics independent of the supervisor's bounded stdout."""
     path=Path(path)
@@ -393,14 +621,17 @@ def train(args):
     config["selection"]=dict(validate_every=args.validate_every,validation_limit=args.validation_limit,
                              patience=args.patience,min_delta=args.min_delta,
                              plateau_lr_factor=args.plateau_lr_factor,max_lr_reductions=args.max_lr_reductions)
+    resume_state = None
+    if args.resume:
+        resume_state, resume_sha = _checkpoint_resume(root, model)
     if args.init_checkpoint:
         if args.resume:
             # The initializer remains provenance; --resume restores full run state.
-            init = torch.load(checkpoint_path, map_location="cpu", weights_only=False)["config"]["initialization"]
+            init = resume_state["config"]["initialization"]
             if digest(args.init_checkpoint) != init["sha256"]:
                 raise ValueError("Initialization object changed since first run")
         else:
-            initial = torch.load(args.init_checkpoint, map_location="cpu", weights_only=False)
+            initial, initial_sha = _checkpoint_load(args.init_checkpoint, model, full_state=False)
             if initial["config"]["model"] != model_config:
                 raise ValueError("Initialization architecture differs")
             previous_features = initial["config"]["features"]
@@ -409,13 +640,13 @@ def train(args):
             model.load_state_dict(initial["model"], strict=True)
             model.pitch_mean.fill_(features["pitch_mean"])
             model.pitch_std.fill_(features["pitch_std"])
-            init = dict(path=str(Path(args.init_checkpoint).resolve()), sha256=digest(args.init_checkpoint),
+            init = dict(path=str(Path(args.init_checkpoint).resolve()), sha256=initial_sha,
                         source_step=initial["step"], source_config=initial["config"],
                         state_policy="strict model; fresh optimizer/scheduler/scaler/RNG/data position")
         config["initialization"] = init
     if args.resume:
         # Our private, locally written checkpoint contains RNG tuples/arrays.
-        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        ckpt = resume_state
         if ckpt["config"] != config:
             previous=ckpt["config"].copy(); current=config.copy()
             resource_keys=("batch_size","accumulation","precision")
@@ -451,15 +682,7 @@ def train(args):
         state = dict(model=model.state_dict(), optimizer=optimizer.state_dict(), scheduler=scheduler.state_dict(),
                      scaler=scaler.state_dict(), rng=rng_state(device), step=step, epoch=epoch, cursor=cursor,
                      best=best, bad=bad, config=config, provenance=provenance,lr_state=lr_state.copy())
-        atomic_torch(checkpoint_path, state)
-        # Link the exact selected object without another expanded checkpoint copy.
-        if is_best:
-            tmp = root / "best.pt.tmp"
-            if tmp.exists(): tmp.unlink()
-            os.link(checkpoint_path, tmp)
-            os.replace(tmp, root / "best.pt")
-        atomic_json(root/"checkpoint.json", dict(step=step, epoch=epoch, cursor=cursor,
-                    checkpoint=str(checkpoint_path), sha256=digest(checkpoint_path), best=best))
+        _checkpoint_publish(root, state, model, is_best)
         last_save = time.monotonic()
 
     def evaluate():
