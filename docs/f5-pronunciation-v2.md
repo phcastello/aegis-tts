@@ -53,7 +53,7 @@ PCM 24 kHz, na mesma voz F5 contínua, sem alteração de configuração ou
 inferência simultânea. Não houve treinamento. Esses resultados não provam
 a pronúncia acústica: a aceitação final é auditiva.
 
-## Instalação do léxico (não executada nesta investigação)
+## Instalação do léxico
 
 O F5 carrega o léxico uma única vez na inicialização. Para instalar, preparar
 uma **nova versão independente** abaixo de `~/.local/share/aegis-tts-f5/versions/`
@@ -75,3 +75,22 @@ tarefa solicitada, usar esse mecanismo com os caminhos conferidos, mantendo
 objetivo e a escuta dos arquivos de comparação sustentam a aceitação. Não
 é necessário fazer deploy de API ou dos apps para uma troca exclusiva do
 léxico no serviço F5.
+
+
+### Aplicação verificada em 25/11/2026
+
+Após a aprovação auditiva explícita do proprietário para a amostra proposta, o
+servidor47 recebeu `20261125-h-stream-lexicon-v2` como nova versão, com a versão
+`20261113-h-stream-pronunciation` preservada. Foi criado um diretório candidato
+por hardlinks de arquivos imutáveis; somente o léxico recebeu inode novo. O
+SHA-256 do léxico v2 é `5f7988869142ce657dadae1c4768e826b633594e288984f2d1147166b9a48283`.
+Antes da troca, os seis assets e os 18 hashes do runtime foram validados
+contra os manifestos, e o vocabulário foi conferido com o normalizador em
+produção. A troca usou `activate_version.py activate` com watchdog independente
+e rollback. Após readiness HTTP 200, perfil `AegisVoicev1.0-F5-H-CONTINUOUS`
+inalterado, 99.840 bytes PCM mono a 24 kHz no endpoint nativo e WAV manual
+mono a 24 kHz (49.920 frames) com a frase sintética `Aegis, abra o Gmail.`,
+a versão foi confirmada via `activate_version.py commit`. Nenhum peso/modelo
+foi alterado, nenhum arquivo da versão anterior foi removido, e não houve
+nova infra paga. A aprovação acústica foi da amostra proposta; a validação
+no aplicativo permanece disponível ao proprietário.
