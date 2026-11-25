@@ -79,6 +79,10 @@ pytest -q
 o perfil protegido. A comparação acústica/auditiva requer o corpus e os assets
 privados locais; não há WAV privado no repositório.
 
+Para a voz F5, o [léxico de pronúncia pt-BR v2](docs/f5-pronunciation-v2.md)
+preserva as regras anteriores e corrige os nomes Aegis e Gmail. Ele é instalado
+como configuração da versão F5 e não altera o perfil Qwen protegido.
+
 ## Smoke operacional
 
 Com o serviço pronto, execute um smoke sem gravar áudio no repositório:
