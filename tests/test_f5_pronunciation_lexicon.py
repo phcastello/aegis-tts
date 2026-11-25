@@ -49,6 +49,8 @@ def test_f5_retains_original_normalization_corpus(case: dict) -> None:
     ("Qwen e QWEN; VPN, DNS e GPU.", "Cuén e Cuén; vê pê ene, dê ene ésse e gê pê u."),
     ("vpn dns gpu; microAegis e Gmailbox.", "vpn dns gpu; microAegis e Gmailbox."),
     ("Aegis_ Gmailx AegisPlus.", "Aegis_ Gmailx AegisPlus."),
+    ("O endereço é exemplo@gmail.com.", "O endereço é exemplo arroba gê mail ponto com."),
+    ("Aegis https://gmail.com.", "Aéjis você pode ver o link pela interface."),
     ("**Aegis** abriu o Gmail (28 registros).", "Aéjis abriu o gê mail vinte e oito registros."),
     ("Aéjis, gê mail, Cuén, vê pê ene, dê ene ésse e gê pê u.",
      "Aéjis, gê mail, Cuén, vê pê ene, dê ene ésse e gê pê u."),
